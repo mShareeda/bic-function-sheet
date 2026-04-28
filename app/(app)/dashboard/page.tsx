@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { VipBadge } from "@/components/ui/vip-badge";
 import { format, addDays } from "date-fns";
 import type { EventStatus } from "@prisma/client";
 import {
@@ -76,6 +77,7 @@ function EventRow({
   status,
   coordinator,
   guests,
+  isVip,
 }: {
   id: string;
   title: string;
@@ -83,11 +85,20 @@ function EventRow({
   status: EventStatus;
   coordinator?: string | null;
   guests?: number | null;
+  isVip?: boolean;
 }) {
   return (
     <Link href={`/events/${id}`} className="focus-ring group block rounded-md">
-      <div className="glass-subtle flex items-center gap-3 rounded-md px-3 py-2.5 transition-all duration-200 hover:translate-x-0.5 hover:shadow-glass">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+      <div
+        className={`glass-subtle flex items-center gap-3 rounded-md px-3 py-2.5 transition-all duration-200 hover:translate-x-0.5 hover:shadow-glass ${
+          isVip ? "border-l-4 border-l-vip" : ""
+        }`}
+      >
+        <div
+          className={`grid h-12 w-12 shrink-0 place-items-center rounded-md ${
+            isVip ? "bg-vip/15 text-vip-foreground" : "bg-primary/10 text-primary"
+          }`}
+        >
           <p className="text-[10px] font-medium uppercase leading-none">
             {format(eventDate, "MMM")}
           </p>
@@ -96,7 +107,10 @@ function EventRow({
           </p>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{title}</p>
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold">{title}</p>
+            {isVip && <VipBadge size="xs" />}
+          </div>
           <p className="truncate text-xs text-muted-foreground">
             {coordinator ?? "No coordinator"}
             {guests ? ` · ${guests} guests` : ""}
@@ -359,6 +373,7 @@ export default async function DashboardPage() {
                     status={ev.status}
                     coordinator={ev.coordinator?.displayName}
                     guests={ev.estimatedGuests}
+                    isVip={ev.isVip}
                   />
                 ))
               )}
@@ -512,6 +527,7 @@ export default async function DashboardPage() {
                     eventDate={ev.eventDate}
                     status={ev.status}
                     coordinator={ev.coordinator?.displayName}
+                    isVip={ev.isVip}
                   />
                 ))
               )}

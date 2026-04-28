@@ -6,10 +6,10 @@ import { format } from "date-fns";
 import type { EventStatus } from "@prisma/client";
 import { Search, ListFilter, CalendarX } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, ALL_STATUSES } from "@/components/ui/status-badge";
+import { VipBadge } from "@/components/ui/vip-badge";
 import { cn } from "@/lib/utils";
 
 export type EventListItem = {
@@ -126,17 +126,18 @@ export function EventsListClient({ events }: { events: EventListItem[] }) {
         <div className="grid gap-3">
           {filtered.map((ev) => (
             <Link key={ev.id} href={`/events/${ev.id}`} className="focus-ring block rounded-lg">
-              <Card className="group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glass-lg">
+              <Card
+                className={cn(
+                  "group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glass-lg",
+                  ev.isVip && "border-l-4 border-l-vip ring-1 ring-vip/20",
+                )}
+              >
                 <CardContent className="flex flex-wrap items-center gap-4 py-4">
-                  <DateBlock date={new Date(ev.eventDate)} />
+                  <DateBlock date={new Date(ev.eventDate)} isVip={ev.isVip} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-base font-semibold">{ev.title}</span>
-                      {ev.isVip && (
-                        <Badge variant="default" className="bg-accent text-accent-foreground text-[10px] px-1.5 py-0">
-                          VIP
-                        </Badge>
-                      )}
+                      {ev.isVip && <VipBadge size="xs" />}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {format(new Date(ev.eventDate), "EEE d MMM yyyy")}
@@ -156,9 +157,16 @@ export function EventsListClient({ events }: { events: EventListItem[] }) {
   );
 }
 
-function DateBlock({ date }: { date: Date }) {
+function DateBlock({ date, isVip }: { date: Date; isVip?: boolean }) {
   return (
-    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-primary/10 text-primary ring-1 ring-primary/20">
+    <div
+      className={cn(
+        "grid h-14 w-14 shrink-0 place-items-center rounded-md ring-1",
+        isVip
+          ? "bg-vip/15 text-vip-foreground ring-vip/40"
+          : "bg-primary/10 text-primary ring-primary/20",
+      )}
+    >
       <p className="text-[10px] font-medium uppercase leading-none">
         {format(date, "MMM")}
       </p>

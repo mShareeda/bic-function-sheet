@@ -39,7 +39,7 @@ export function CalendarView({ events }: { events: EventInput[] }) {
       ...ev,
       backgroundColor: `hsl(${token} / 0.85)`,
       borderColor: ev.extendedProps?.isVip
-        ? "hsl(var(--primary))"
+        ? "hsl(var(--vip))"
         : `hsl(${token})`,
       borderWidth: ev.extendedProps?.isVip ? 3 : 1,
       textColor: "#fff",
@@ -96,10 +96,10 @@ export function CalendarView({ events }: { events: EventInput[] }) {
             {STATUS_LABEL[status]}
           </span>
         ))}
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/60 px-2 py-1">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-vip/15 px-2 py-1 ring-1 ring-vip/30">
           <span
             aria-hidden
-            className="h-2.5 w-2.5 rounded-sm border-2 border-primary"
+            className="h-2.5 w-2.5 rounded-sm border-2 border-vip"
           />
           VIP
         </span>

@@ -59,6 +59,10 @@ const config: Config = {
           live: "hsl(var(--status-live) / <alpha-value>)",
           closed: "hsl(var(--status-closed) / <alpha-value>)",
         },
+        vip: {
+          DEFAULT: "hsl(var(--vip) / <alpha-value>)",
+          foreground: "hsl(var(--vip-foreground) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

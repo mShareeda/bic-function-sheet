@@ -16,7 +16,10 @@ const COLORS = {
   surface: "#F8FAFC",
   primary: "#B91C1C",
   primaryFaint: "#FEE2E2",
-  vip: "#CC0000",
+  vip: "#D97706",
+  vipDark: "#92400E",
+  vipFaint: "#FEF3C7",
+  vipBorder: "#F59E0B",
   live: "#16A34A",
   accent: "#F59E0B",
 };
@@ -40,6 +43,33 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     marginBottom: 14,
   },
+  headerBandVip: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    borderBottomWidth: 4,
+    borderBottomColor: COLORS.vipBorder,
+    paddingBottom: 10,
+    marginBottom: 4,
+    backgroundColor: COLORS.vipFaint,
+    paddingTop: 6,
+    paddingHorizontal: 8,
+    marginHorizontal: -8,
+    marginTop: -8,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
+  },
+  vipRibbon: {
+    backgroundColor: COLORS.vip,
+    color: "#fff",
+    fontFamily: "Helvetica-Bold",
+    fontSize: 9,
+    letterSpacing: 1.5,
+    textAlign: "center",
+    paddingVertical: 5,
+    marginBottom: 12,
+    borderRadius: 3,
+  },
   brandLine: { fontSize: 8, color: COLORS.muted, letterSpacing: 1.2 },
   docTitle: {
     fontSize: 18,
@@ -51,14 +81,14 @@ const styles = StyleSheet.create({
   headerRight: { alignItems: "flex-end" },
   badgeRow: { flexDirection: "row", gap: 4, marginTop: 4 },
   vipBadge: {
-    fontSize: 7,
+    fontSize: 8,
     color: "#fff",
     backgroundColor: COLORS.vip,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 3,
     fontFamily: "Helvetica-Bold",
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   statusBadge: {
     fontSize: 7,
@@ -343,8 +373,11 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
       author="BIC Function Sheet"
     >
       <Page size="A4" style={styles.page}>
-        {/* ── Header band ── */}
-        <View style={styles.headerBand} fixed>
+        {/* ── Header band (VIP gets a tinted band + thicker gold rule) ── */}
+        <View
+          style={event.isVip ? styles.headerBandVip : styles.headerBand}
+          fixed
+        >
           <View>
             <Text style={styles.brandLine}>BAHRAIN INTERNATIONAL CIRCUIT</Text>
             <Text style={styles.docTitle}>Function Sheet</Text>
@@ -352,7 +385,9 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
           </View>
           <View style={styles.headerRight}>
             <View style={styles.badgeRow}>
-              {event.isVip && <Text style={styles.vipBadge}>VIP</Text>}
+              {event.isVip && (
+                <Text style={styles.vipBadge}>★ VIP / DIGNITARY</Text>
+              )}
               <Text style={styles.statusBadge}>
                 {(STATUS_LABEL[event.status] ?? event.status).toUpperCase()}
               </Text>
@@ -360,6 +395,12 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
             <Text style={styles.generated}>Generated {generated}</Text>
           </View>
         </View>
+
+        {event.isVip && (
+          <Text style={styles.vipRibbon}>
+            ★  VIP / DIGNITARY EVENT — HANDLE WITH ELEVATED PROTOCOL  ★
+          </Text>
+        )}
 
         {/* ── Event details ── */}
         <Text style={styles.sectionTitle}>Event Details</Text>
@@ -393,7 +434,11 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
           />
           <KV label="Client Name" value={event.clientName ?? "—"} />
           <KV label="Client Contact" value={event.clientContact ?? "—"} />
-          <KV label="VIP / Dignitary" value={event.isVip ? "Yes" : "No"} />
+          <KV
+            label="VIP / Dignitary"
+            value={event.isVip ? "★ Yes — VIP" : "No"}
+            bold={event.isVip}
+          />
           <KV
             label="Status"
             value={STATUS_LABEL[event.status] ?? event.status}
@@ -526,7 +571,10 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
 
         {/* ── Footer ── */}
         <View style={styles.footer} fixed>
-          <Text>BIC Function Sheet · {event.title} · Confidential</Text>
+          <Text>
+            BIC Function Sheet · {event.title}
+            {event.isVip ? " · ★ VIP" : ""} · Confidential
+          </Text>
           <Text
             render={({ pageNumber, totalPages }) =>
               `Page ${pageNumber} of ${totalPages}`

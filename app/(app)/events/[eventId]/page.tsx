@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { VipBadge } from "@/components/ui/vip-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import {
@@ -113,7 +114,17 @@ export default async function EventPage({
 
   return (
     <div className="space-y-6">
-      <div className="glass-strong sticky top-14 z-20 -mx-4 lg:-mx-8 px-4 lg:px-8 py-4 border-b border-border/40 backdrop-blur-glass-strong">
+      <div
+        className={`glass-strong sticky top-14 z-20 -mx-4 lg:-mx-8 px-4 lg:px-8 py-4 border-b backdrop-blur-glass-strong ${
+          event.isVip ? "border-vip/60 ring-1 ring-vip/30" : "border-border/40"
+        }`}
+      >
+        {event.isVip && (
+          <div
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-vip via-vip/80 to-vip"
+          />
+        )}
         <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -121,9 +132,7 @@ export default async function EventPage({
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-3">
               <h1 className="text-h1 truncate">{event.title}</h1>
-              {event.isVip && (
-                <Badge className="bg-accent text-accent-foreground">VIP</Badge>
-              )}
+              {event.isVip && <VipBadge size="md" />}
               <StatusBadge status={event.status} size="md" />
             </div>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
