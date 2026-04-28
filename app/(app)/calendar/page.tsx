@@ -51,8 +51,16 @@ export default async function CalendarPage() {
   }));
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Calendar</h1>
+    <div className="space-y-6">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Schedule
+        </p>
+        <h1 className="mt-1 text-display">Calendar</h1>
+        <p className="text-sm text-muted-foreground">
+          {events.length} event{events.length === 1 ? "" : "s"} visible to you
+        </p>
+      </div>
       <CalendarView events={calEvents} />
     </div>
   );

@@ -14,7 +14,15 @@ export default async function AdminVenuesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Venues</h1>
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Admin
+        </p>
+        <h1 className="mt-1 text-display">Venues</h1>
+        <p className="text-sm text-muted-foreground">
+          {venues.length} venue{venues.length === 1 ? "" : "s"}
+        </p>
+      </div>
       <VenueActions venues={venues} />
     </div>
   );

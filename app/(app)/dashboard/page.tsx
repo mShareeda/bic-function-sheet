@@ -12,28 +12,19 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { format, addDays } from "date-fns";
 import type { EventStatus } from "@prisma/client";
-
-const STATUS_LABEL: Record<EventStatus, string> = {
-  DRAFT: "Draft",
-  CONFIRMED: "Confirmed",
-  FUNCTION_SHEET_SENT: "Sheet Sent",
-  IN_SETUP: "In Setup",
-  LIVE: "Live",
-  CLOSED: "Closed",
-  ARCHIVED: "Archived",
-};
-
-const STATUS_COLOR: Record<EventStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-700",
-  CONFIRMED: "bg-blue-100 text-blue-700",
-  FUNCTION_SHEET_SENT: "bg-indigo-100 text-indigo-700",
-  IN_SETUP: "bg-yellow-100 text-yellow-700",
-  LIVE: "bg-green-100 text-green-700",
-  CLOSED: "bg-gray-100 text-gray-600",
-  ARCHIVED: "bg-gray-50 text-gray-400",
-};
+import {
+  CalendarClock,
+  AlertTriangle,
+  BellRing,
+  ListChecks,
+  Plus,
+  Sparkles,
+  ArrowUpRight,
+  CalendarX,
+} from "lucide-react";
 
 const ACTIVE_STATUSES: EventStatus[] = [
   "DRAFT",
@@ -43,26 +34,50 @@ const ACTIVE_STATUSES: EventStatus[] = [
   "LIVE",
 ];
 
-// ── Shared sub-components ────────────────────────────────────────────────────
+// ── Sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({
   label,
   value,
   sub,
+  icon: Icon,
+  tone = "primary",
 }: {
   label: string;
   value: number;
   sub: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone?: "primary" | "live" | "warning" | "info";
 }) {
+  const toneClass = {
+    primary: "from-primary/10 to-primary/0 text-primary",
+    live: "from-status-live/15 to-status-live/0 text-status-live",
+    warning: "from-accent/20 to-accent/0 text-accent-foreground",
+    info: "from-status-confirmed/10 to-status-confirmed/0 text-status-confirmed",
+  }[tone];
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-3xl">{value}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-xs text-muted-foreground">{sub}</p>
-      </CardContent>
+    <Card className="relative overflow-hidden p-5">
+      <div
+        aria-hidden
+        className={`absolute -right-6 -top-6 h-32 w-32 rounded-full bg-gradient-to-br ${toneClass} blur-2xl opacity-60`}
+      />
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <p className="text-3xl font-bold tabular-nums tracking-tight">
+            {value}
+          </p>
+          <p className="text-xs text-muted-foreground">{sub}</p>
+        </div>
+        <div
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${toneClass.split(" ").slice(-1)} bg-surface/60 ring-1 ring-border/40`}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
     </Card>
   );
 }
@@ -83,38 +98,37 @@ function EventRow({
   guests?: number | null;
 }) {
   return (
-    <Link href={`/events/${id}`} className="block">
-      <div className="flex items-center gap-3 rounded-md border px-3 py-2.5 hover:bg-muted/40 transition-colors">
-        <div className="w-10 shrink-0 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase leading-tight">
+    <Link href={`/events/${id}`} className="focus-ring group block rounded-md">
+      <div className="glass-subtle flex items-center gap-3 rounded-md px-3 py-2.5 transition-all duration-200 hover:translate-x-0.5 hover:shadow-glass">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+          <p className="text-[10px] font-medium uppercase leading-none">
             {format(eventDate, "MMM")}
           </p>
-          <p className="text-lg font-bold leading-none">{format(eventDate, "d")}</p>
+          <p className="text-lg font-bold leading-none tabular-nums">
+            {format(eventDate, "d")}
+          </p>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{title}</p>
-          <p className="text-xs text-muted-foreground truncate">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold">{title}</p>
+          <p className="truncate text-xs text-muted-foreground">
             {coordinator ?? "No coordinator"}
             {guests ? ` · ${guests} guests` : ""}
           </p>
         </div>
-        <span
-          className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLOR[status]}`}
-        >
-          {STATUS_LABEL[status]}
-        </span>
+        <StatusBadge status={status} />
+        <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-all group-hover:text-muted-foreground" />
       </div>
     </Link>
   );
 }
 
 function RequirementRow({
-  id,
   description,
   deptName,
   eventId,
   eventTitle,
   eventDate,
+  priority,
 }: {
   id: string;
   description: string;
@@ -122,21 +136,82 @@ function RequirementRow({
   eventId: string;
   eventTitle: string;
   eventDate: Date;
+  priority?: string | null;
 }) {
+  const priorityDot =
+    priority === "HIGH" || priority === "URGENT"
+      ? "bg-destructive"
+      : priority === "MEDIUM"
+      ? "bg-accent"
+      : "bg-muted-foreground/40";
   return (
-    <Link key={id} href={`/events/${eventId}`} className="block">
-      <div className="rounded-md border px-3 py-2.5 hover:bg-muted/40 transition-colors">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm line-clamp-2 flex-1">{description}</p>
-          <Badge variant="outline" className="text-xs shrink-0">
-            {deptName}
-          </Badge>
+    <Link
+      href={`/events/${eventId}`}
+      className="focus-ring group block rounded-md"
+    >
+      <div className="glass-subtle flex items-start gap-3 rounded-md px-3 py-2.5 transition-all hover:shadow-glass">
+        <span
+          aria-hidden
+          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${priorityDot}`}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-sm">{description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {eventTitle} · {format(eventDate, "d MMM yyyy")}
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {eventTitle} · {format(eventDate, "d MMM yyyy")}
-        </p>
+        <Badge variant="outline" className="shrink-0 text-xs">
+          {deptName}
+        </Badge>
       </div>
     </Link>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+      <div className="grid h-12 w-12 place-items-center rounded-full bg-muted/50 text-muted-foreground">
+        <Icon className="h-5 w-5" />
+      </div>
+      <p className="text-sm font-medium">{title}</p>
+      <p className="text-xs text-muted-foreground">{description}</p>
+      {action && <div className="mt-2">{action}</div>}
+    </div>
+  );
+}
+
+function PageHeader({
+  greeting,
+  subtitle,
+  action,
+}: {
+  greeting: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <Sparkles className="h-3.5 w-3.5 text-accent" />
+          Dashboard
+        </p>
+        <h1 className="mt-1 text-display">{greeting}</h1>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
+      </div>
+      {action}
+    </div>
   );
 }
 
@@ -153,7 +228,7 @@ export default async function DashboardPage() {
   if (isAdmin(u) || hasRole(u, "COORDINATOR")) {
     const coordScope = isAdmin(u) ? {} : { coordinatorId: u.id };
 
-    const [upcomingEvents, statusGroups, unassignedReqs, unreadCount] =
+    const [upcomingEvents, statusGroups, unassignedReqs, unreadCount, liveCount] =
       await Promise.all([
         prisma.event.findMany({
           where: {
@@ -190,54 +265,76 @@ export default async function DashboardPage() {
         prisma.notification.count({
           where: { userId: u.id, readAt: null },
         }),
+        prisma.event.count({
+          where: { ...coordScope, status: "LIVE" },
+        }),
       ]);
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Welcome, {u.displayName}</h1>
-            <p className="text-sm text-muted-foreground">{u.roles.join(" · ")}</p>
-          </div>
-          {canCreateEvent(u) && (
-            <Button asChild size="sm">
-              <Link href="/events/new">New event</Link>
-            </Button>
-          )}
-        </div>
+        <PageHeader
+          greeting={`Welcome, ${u.displayName.split(" ")[0]}`}
+          subtitle={u.roles.join(" · ")}
+          action={
+            canCreateEvent(u) && (
+              <Button asChild size="sm">
+                <Link href="/events/new">
+                  <Plus className="h-4 w-4" />
+                  New event
+                </Link>
+              </Button>
+            )
+          }
+        />
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Upcoming (30 days)"
+            label="Upcoming (30d)"
             value={upcomingEvents.length}
-            sub="Active events in the next 30 days"
+            sub="Active events ahead"
+            icon={CalendarClock}
+            tone="primary"
           />
           <StatCard
-            label="Unassigned requirements"
+            label="Live now"
+            value={liveCount}
+            sub="Currently running"
+            icon={Sparkles}
+            tone="live"
+          />
+          <StatCard
+            label="Unassigned"
             value={unassignedReqs.length}
-            sub="Upcoming requirements with no assignee"
+            sub="Requirements with no owner"
+            icon={AlertTriangle}
+            tone="warning"
           />
           <StatCard
-            label="Unread notifications"
+            label="Unread alerts"
             value={unreadCount}
-            sub="Items waiting for your attention"
+            sub="Notifications waiting"
+            icon={BellRing}
+            tone="info"
           />
         </div>
 
         {statusGroups.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Events by status</CardTitle>
+              <CardTitle className="text-base">Pipeline</CardTitle>
+              <CardDescription>Active events by status</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {statusGroups.map((g) => (
                   <span
                     key={g.status}
-                    className={`inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full ${STATUS_COLOR[g.status]}`}
+                    className="inline-flex items-center gap-2"
                   >
-                    {STATUS_LABEL[g.status]}
-                    <span className="font-bold">{g._count._all}</span>
+                    <StatusBadge status={g.status} size="md" />
+                    <span className="text-sm font-bold tabular-nums">
+                      {g._count._all}
+                    </span>
                   </span>
                 ))}
               </div>
@@ -258,7 +355,18 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {upcomingEvents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No upcoming events.</p>
+                <EmptyState
+                  icon={CalendarX}
+                  title="No upcoming events"
+                  description="Active events scheduled in the next 30 days will appear here."
+                  action={
+                    canCreateEvent(u) && (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href="/events/new">Create event</Link>
+                      </Button>
+                    )
+                  }
+                />
               ) : (
                 upcomingEvents.map((ev) => (
                   <EventRow
@@ -277,16 +385,16 @@ export default async function DashboardPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Requirements needing attention</CardTitle>
-              <CardDescription>
-                Upcoming events with unassigned requirements
-              </CardDescription>
+              <CardTitle className="text-base">Needs attention</CardTitle>
+              <CardDescription>Unassigned requirements</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {unassignedReqs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  All requirements are assigned.
-                </p>
+                <EmptyState
+                  icon={ListChecks}
+                  title="All clear"
+                  description="Every requirement has an assignee. Nice work."
+                />
               ) : (
                 unassignedReqs.map((req) => (
                   <RequirementRow
@@ -297,6 +405,7 @@ export default async function DashboardPage() {
                     eventId={req.event.id}
                     eventTitle={req.event.title}
                     eventDate={req.event.eventDate}
+                    priority={req.priority}
                   />
                 ))
               )}
@@ -368,28 +477,32 @@ export default async function DashboardPage() {
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold">Welcome, {u.displayName}</h1>
-          <p className="text-sm text-muted-foreground">
-            Managing: {deptNames.join(", ")}
-          </p>
-        </div>
+        <PageHeader
+          greeting={`Welcome, ${u.displayName.split(" ")[0]}`}
+          subtitle={`Managing: ${deptNames.join(", ")}`}
+        />
 
         <div className="grid gap-4 sm:grid-cols-3">
           <StatCard
             label="Upcoming events"
             value={upcomingEvents.length}
-            sub="In your departments (next 30 days)"
+            sub="In your departments"
+            icon={CalendarClock}
+            tone="primary"
           />
           <StatCard
-            label="Unassigned requirements"
+            label="Unassigned"
             value={unassignedReqs.length}
             sub="Needing a team member"
+            icon={AlertTriangle}
+            tone="warning"
           />
           <StatCard
             label="My tasks"
             value={myAssignments.length}
-            sub="Requirements assigned to you"
+            sub="Assigned to you"
+            icon={ListChecks}
+            tone="info"
           />
         </div>
 
@@ -406,7 +519,11 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {upcomingEvents.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No upcoming events.</p>
+                <EmptyState
+                  icon={CalendarX}
+                  title="No upcoming events"
+                  description="Events in your departments will appear here."
+                />
               ) : (
                 upcomingEvents.map((ev) => (
                   <EventRow
@@ -429,9 +546,11 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2">
               {unassignedReqs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  All requirements are assigned.
-                </p>
+                <EmptyState
+                  icon={ListChecks}
+                  title="All clear"
+                  description="Every requirement has an assignee."
+                />
               ) : (
                 unassignedReqs.map((req) => (
                   <RequirementRow
@@ -442,6 +561,7 @@ export default async function DashboardPage() {
                     eventId={req.event.id}
                     eventTitle={req.event.title}
                     eventDate={req.event.eventDate}
+                    priority={req.priority}
                   />
                 ))
               )}
@@ -464,21 +584,23 @@ export default async function DashboardPage() {
                 <Link
                   key={a.requirementId}
                   href={`/events/${a.requirement.event.id}`}
-                  className="block"
+                  className="focus-ring block rounded-md"
                 >
-                  <div className="flex items-start gap-3 rounded-md border px-3 py-2.5 hover:bg-muted/40 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm line-clamp-1">
+                  <div className="glass-subtle flex items-start gap-3 rounded-md px-3 py-2.5 transition-all hover:shadow-glass">
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-1 text-sm">
                         {a.requirement.description}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         {a.requirement.event.title} ·{" "}
                         {format(a.requirement.event.eventDate, "d MMM yyyy")}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {a.requirement.department.name}
-                    </Badge>
+                    <div className="flex shrink-0 gap-1">
+                      <Badge variant="outline" className="text-xs">
+                        {a.requirement.department.name}
+                      </Badge>
+                    </div>
                   </div>
                 </Link>
               ))}
@@ -522,40 +644,50 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Welcome, {u.displayName}</h1>
-        <p className="text-sm text-muted-foreground">
-          {u.roles.length > 0
+      <PageHeader
+        greeting={`Welcome, ${u.displayName.split(" ")[0]}`}
+        subtitle={
+          u.roles.length > 0
             ? u.roles.join(" · ")
-            : "No roles assigned — contact an admin"}
-        </p>
-      </div>
+            : "No roles assigned — contact an admin"
+        }
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Upcoming events"
           value={byEvent.size}
           sub="Events you have tasks in"
+          icon={CalendarClock}
+          tone="primary"
         />
         <StatCard
           label="Total tasks"
           value={assignments.length}
           sub="Requirements assigned to you"
+          icon={ListChecks}
+          tone="info"
         />
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">My upcoming tasks</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-h2">My upcoming tasks</h2>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/my-tasks">See all</Link>
           </Button>
         </div>
 
         {byEvent.size === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No upcoming tasks assigned to you.
-          </p>
+          <Card>
+            <CardContent className="p-6">
+              <EmptyState
+                icon={ListChecks}
+                title="Nothing on your plate"
+                description="Tasks assigned to you will appear here."
+              />
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-4">
             {[...byEvent.entries()].map(([, items]) => {
@@ -563,17 +695,13 @@ export default async function DashboardPage() {
               return (
                 <Card key={ev.id}>
                   <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <CardTitle className="text-base truncate">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <CardTitle className="truncate text-base">
                         {ev.title}
                       </CardTitle>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span
-                          className={`text-xs font-medium px-2 py-1 rounded-full ${STATUS_COLOR[ev.status]}`}
-                        >
-                          {STATUS_LABEL[ev.status]}
-                        </span>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      <div className="flex shrink-0 items-center gap-2">
+                        <StatusBadge status={ev.status} />
+                        <span className="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
                           {format(ev.eventDate, "d MMM yyyy")}
                         </span>
                       </div>
@@ -584,13 +712,13 @@ export default async function DashboardPage() {
                       <Link
                         key={a.requirementId}
                         href={`/events/${ev.id}`}
-                        className="block"
+                        className="focus-ring block rounded-md"
                       >
-                        <div className="flex items-start gap-2 rounded-md border px-3 py-2 hover:bg-muted/40 transition-colors">
-                          <p className="text-sm flex-1 line-clamp-2">
+                        <div className="glass-subtle flex items-start gap-2 rounded-md px-3 py-2 transition-all hover:shadow-glass">
+                          <p className="line-clamp-2 flex-1 text-sm">
                             {a.requirement.description}
                           </p>
-                          <div className="flex gap-1 shrink-0">
+                          <div className="flex shrink-0 gap-1">
                             <Badge variant="outline" className="text-xs">
                               {a.requirement.department.name}
                             </Badge>

@@ -100,10 +100,15 @@ export default async function AdminAuditPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Audit log</h1>
-      <p className="text-sm text-muted-foreground">
-        {totalEvents} event{totalEvents !== 1 ? "s" : ""} with activity
-      </p>
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Admin
+        </p>
+        <h1 className="mt-1 text-display">Audit log</h1>
+        <p className="text-sm text-muted-foreground">
+          {totalEvents} event{totalEvents !== 1 ? "s" : ""} with activity
+        </p>
+      </div>
 
       <AuditEventList
         eventGroups={eventGroups}
