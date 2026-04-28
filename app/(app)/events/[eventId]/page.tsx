@@ -2,21 +2,38 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canEditEvent, canViewFullFunctionSheet, isAdmin, hasRole } from "@/lib/authz";
+import {
+  canEditEvent,
+  canViewFullFunctionSheet,
+  isAdmin,
+  hasRole,
+} from "@/lib/authz";
 import type { SessionUser } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import {
+  Pencil,
+  CalendarRange,
+  Building2,
+  ListChecks,
+  FileDown,
+  ScrollText,
+  Calendar,
+  Paperclip,
+  Users,
+} from "lucide-react";
 import { StatusChanger } from "@/components/events/status-changer";
 import { AttachmentPanel } from "@/components/events/attachment-panel";
 
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: "Draft", CONFIRMED: "Confirmed", FUNCTION_SHEET_SENT: "Sheet Sent",
-  IN_SETUP: "In Setup", LIVE: "Live", CLOSED: "Closed", ARCHIVED: "Archived",
-};
-
-export default async function EventPage({ params }: { params: Promise<{ eventId: string }> }) {
+export default async function EventPage({
+  params,
+}: {
+  params: Promise<{ eventId: string }>;
+}) {
   const { eventId } = await params;
   const session = await auth();
   const u = session!.user as SessionUser;
@@ -35,8 +52,12 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
           department: true,
           requirements: {
             include: {
-              assignments: { include: { user: { select: { id: true, displayName: true } } } },
-              managerNotes: { include: { author: { select: { id: true, displayName: true } } } },
+              assignments: {
+                include: { user: { select: { id: true, displayName: true } } },
+              },
+              managerNotes: {
+                include: { author: { select: { id: true, displayName: true } } },
+              },
             },
             orderBy: { sortOrder: "asc" },
           },
@@ -55,9 +76,13 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
   const eventDeptIds = event.departments.map((d) => d.departmentId);
 
   const canEdit = canEditEvent(u, event);
-  const canFullView = canViewFullFunctionSheet(u, event, managedDeptIds, eventDeptIds);
+  const canFullView = canViewFullFunctionSheet(
+    u,
+    event,
+    managedDeptIds,
+    eventDeptIds,
+  );
 
-  // Team member: only show their assigned requirements
   const assignedReqIds = new Set<string>();
   if (!canFullView && hasRole(u, "DEPT_TEAM_MEMBER")) {
     const assignments = await prisma.requirementAssignment.findMany({
@@ -67,194 +92,370 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
     assignments.forEach((a) => assignedReqIds.add(a.requirementId));
   }
 
+  const facts: [string, string | null | undefined][] = [
+    ["Client", event.clientName],
+    ["Client contact", event.clientContact],
+    ["Coordinator", event.coordinator?.displayName],
+    ["Salesperson", event.salespersonName],
+    ["Maximizer #", event.maximizerNumber],
+    ["Estimated guests", event.estimatedGuests?.toString()],
+    [
+      "Confirmation received",
+      event.confirmationReceived
+        ? format(event.confirmationReceived, "d MMM yyyy")
+        : null,
+    ],
+  ];
+  const visibleFacts = facts.filter(([, v]) => v);
+
+  const showRequirements =
+    (canFullView || assignedReqIds.size > 0) && event.departments.length > 0;
+
   return (
-    <div className="space-y-8 max-w-4xl">
-      {/* Header */}
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold">{event.title}</h1>
-            {event.isVip && <Badge>VIP</Badge>}
-            <span className="text-sm px-2 py-1 rounded-full bg-muted font-medium">
-              {STATUS_LABEL[event.status] ?? event.status}
-            </span>
+    <div className="space-y-6">
+      <div className="glass-strong sticky top-14 z-20 -mx-4 lg:-mx-8 px-4 lg:px-8 py-4 border-b border-border/40 backdrop-blur-glass-strong">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Function sheet
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <h1 className="text-h1 truncate">{event.title}</h1>
+              {event.isVip && (
+                <Badge className="bg-accent text-accent-foreground">VIP</Badge>
+              )}
+              <StatusBadge status={event.status} size="md" />
+            </div>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CalendarRange className="h-3.5 w-3.5" />
+              {format(event.eventDate, "EEEE, d MMMM yyyy")}
+            </p>
           </div>
-          <p className="text-muted-foreground">{format(event.eventDate, "EEEE, d MMMM yyyy")}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canEdit && (
-            <>
-              <Button asChild size="sm" variant="outline"><Link href={`/events/${eventId}/edit`}>Edit</Link></Button>
-              <Button asChild size="sm" variant="outline"><Link href={`/events/${eventId}/agenda`}>Agenda</Link></Button>
-              <Button asChild size="sm" variant="outline"><Link href={`/events/${eventId}/departments`}>Departments</Link></Button>
-              <Button asChild size="sm" variant="outline"><Link href={`/events/${eventId}/requirements`}>Requirements</Link></Button>
-            </>
-          )}
-          {canFullView && (
-            <Button asChild size="sm" variant="outline">
-              <Link href={`/events/${eventId}/pdf`} target="_blank">Export PDF</Link>
-            </Button>
-          )}
-          {canEdit && <StatusChanger eventId={eventId} currentStatus={event.status} />}
-          {canEdit && <Button asChild size="sm" variant="ghost"><Link href={`/events/${eventId}/audit`}>Audit</Link></Button>}
+          <div className="flex flex-wrap items-center gap-2">
+            {canEdit && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/events/${eventId}/edit`}>
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
+                </Link>
+              </Button>
+            )}
+            {canFullView && (
+              <Button asChild size="sm" variant="outline">
+                <Link href={`/events/${eventId}/pdf`} target="_blank">
+                  <FileDown className="h-3.5 w-3.5" />
+                  PDF
+                </Link>
+              </Button>
+            )}
+            {canEdit && (
+              <StatusChanger eventId={eventId} currentStatus={event.status} />
+            )}
+            {canEdit && (
+              <Button asChild size="sm" variant="ghost">
+                <Link href={`/events/${eventId}/audit`}>
+                  <ScrollText className="h-3.5 w-3.5" />
+                  Audit
+                </Link>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Details */}
-      <div className="grid gap-4 sm:grid-cols-2 text-sm">
-        {[
-          ["Client", event.clientName],
-          ["Client contact", event.clientContact],
-          ["Coordinator", event.coordinator?.displayName],
-          ["Salesperson", event.salespersonName],
-          ["Maximizer #", event.maximizerNumber],
-          ["Estimated guests", event.estimatedGuests?.toString()],
-          ["Confirmation received", event.confirmationReceived ? format(event.confirmationReceived, "d MMM yyyy") : null],
-        ]
-          .filter(([, v]) => v)
-          .map(([label, value]) => (
-            <div key={label as string}>
-              <span className="text-muted-foreground">{label}: </span>
-              <span className="font-medium">{value}</span>
-            </div>
-          ))}
-      </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList>
+          <TabsTrigger value="overview">
+            <Calendar className="mr-1.5 h-3.5 w-3.5" />
+            Overview
+          </TabsTrigger>
+          {event.agendaItems.length > 0 && (
+            <TabsTrigger value="agenda">
+              <ListChecks className="mr-1.5 h-3.5 w-3.5" />
+              Agenda
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] tabular-nums">
+                {event.agendaItems.length}
+              </span>
+            </TabsTrigger>
+          )}
+          {showRequirements && (
+            <TabsTrigger value="departments">
+              <Building2 className="mr-1.5 h-3.5 w-3.5" />
+              Departments
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] tabular-nums">
+                {event.departments.length}
+              </span>
+            </TabsTrigger>
+          )}
+          {(canEdit || event.attachments.length > 0) && (
+            <TabsTrigger value="attachments">
+              <Paperclip className="mr-1.5 h-3.5 w-3.5" />
+              Attachments
+              {event.attachments.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[10px] tabular-nums">
+                  {event.attachments.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      {/* Time windows */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Schedule</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 text-sm sm:grid-cols-3">
-          {(
-            [
-              ["Setup", event.setupStart, event.setupEnd],
-              ["Live event", event.liveStart, event.liveEnd],
-              ["Breakdown", event.breakdownStart, event.breakdownEnd],
-            ] as [string, Date, Date][]
-          ).map(([label, start, end]) => (
-            <div key={label}>
-              <p className="text-muted-foreground text-xs">{label}</p>
-              <p>{format(start, "HH:mm")} – {format(end, "HH:mm")}</p>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Attachments */}
-      {(canEdit || event.attachments.length > 0) && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Attachments</CardTitle></CardHeader>
-          <CardContent>
-            <AttachmentPanel
-              attachments={event.attachments.map((a) => ({
-                id: a.id,
-                fileName: a.fileName,
-                byteSize: a.byteSize,
-                storageKey: a.storageKey,
-                createdAt: a.createdAt.toISOString(),
-                uploadedBy: a.uploadedBy,
-              }))}
-              scope={{ eventId }}
-              canUpload={canEdit}
-              canDelete={canEdit}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Agenda */}
-      {event.agendaItems.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Agenda</CardTitle></CardHeader>
-          <CardContent>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground text-xs border-b">
-                  <th className="text-left py-1 pr-4">#</th>
-                  <th className="text-left py-1 pr-4">Time</th>
-                  <th className="text-left py-1 pr-4">Description</th>
-                  <th className="text-left py-1 pr-4">Venue</th>
-                  <th className="text-left py-1">Pax</th>
-                </tr>
-              </thead>
-              <tbody>
-                {event.agendaItems.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <td className="py-2 pr-4">{item.sequence}</td>
-                    <td className="py-2 pr-4 whitespace-nowrap">
-                      {format(item.startTime, "HH:mm")} – {format(item.endTime, "HH:mm")}
-                    </td>
-                    <td className="py-2 pr-4">{item.description}</td>
-                    <td className="py-2 pr-4 text-muted-foreground">{item.venue?.name ?? item.venueText ?? "—"}</td>
-                    <td className="py-2">{item.participants ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Department requirements */}
-      {(canFullView || assignedReqIds.size > 0) && event.departments.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Department requirements</h2>
-          {event.departments.map((ed) => {
-            const reqs = canFullView
-              ? ed.requirements
-              : ed.requirements.filter((r) => assignedReqIds.has(r.id));
-            if (!canFullView && reqs.length === 0) return null;
-
-            return (
-              <Card key={ed.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{ed.department.name}</CardTitle>
-                    {canEdit || managedDeptIds.includes(ed.departmentId) ? (
-                      <Button asChild size="sm" variant="ghost">
-                        <Link href={`/events/${eventId}/requirements/${ed.departmentId}`}>Edit</Link>
-                      </Button>
-                    ) : null}
-                  </div>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Schedule</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {reqs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No requirements yet.</p>
-                  ) : (
-                    reqs.map((req) => {
-                      const visibleNotes = req.managerNotes.filter(
-                        (n) => isAdmin(u) || event.coordinatorId === u.id || n.author.id === u.id
-                      );
-                      return (
-                        <div key={req.id} className="border rounded-md p-3 space-y-2">
-                          <p className="text-sm whitespace-pre-wrap">{req.description}</p>
-                          {req.priority && <Badge variant="outline" className="text-xs">{req.priority}</Badge>}
-                          {req.assignments.length > 0 && (
-                            <div className="flex flex-wrap gap-1 text-xs">
-                              <span className="text-muted-foreground">Assigned:</span>
-                              {req.assignments.map((a) => (
-                                <span key={a.userId} className="bg-muted rounded-full px-2 py-0.5">{a.user.displayName}</span>
-                              ))}
-                            </div>
-                          )}
-                          {visibleNotes.length > 0 && (
-                            <div className="space-y-1 border-t pt-2">
-                              {visibleNotes.map((n) => (
-                                <div key={n.id} className="text-xs bg-yellow-50 border border-yellow-200 rounded p-2">
-                                  <span className="font-medium">{n.author.displayName}:</span> {n.body}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
+                <CardContent className="grid gap-4 text-sm sm:grid-cols-3">
+                  {(
+                    [
+                      ["Setup", event.setupStart, event.setupEnd, "primary"],
+                      ["Live event", event.liveStart, event.liveEnd, "live"],
+                      [
+                        "Breakdown",
+                        event.breakdownStart,
+                        event.breakdownEnd,
+                        "muted",
+                      ],
+                    ] as [string, Date, Date, string][]
+                  ).map(([label, start, end, tone]) => (
+                    <div
+                      key={label}
+                      className="glass-subtle rounded-md p-3 space-y-1"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            tone === "primary"
+                              ? "bg-primary"
+                              : tone === "live"
+                              ? "bg-status-live"
+                              : "bg-muted-foreground/40"
+                          }`}
+                        />
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          {label}
+                        </p>
+                      </div>
+                      <p className="font-semibold tabular-nums">
+                        {format(start, "HH:mm")} – {format(end, "HH:mm")}
+                      </p>
+                    </div>
+                  ))}
                 </CardContent>
               </Card>
-            );
-          })}
-        </div>
-      )}
+
+              {canEdit && (
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/events/${eventId}/agenda`}>
+                      Edit agenda
+                    </Link>
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/events/${eventId}/departments`}>
+                      Manage departments
+                    </Link>
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={`/events/${eventId}/requirements`}>
+                      Edit requirements
+                    </Link>
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Quick facts</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {visibleFacts.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No additional details.</p>
+                ) : (
+                  visibleFacts.map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {label}
+                      </p>
+                      <p className="font-medium">{value}</p>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {event.agendaItems.length > 0 && (
+          <TabsContent value="agenda">
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/40 text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="py-3 px-4 text-left font-medium">#</th>
+                        <th className="py-3 px-4 text-left font-medium">Time</th>
+                        <th className="py-3 px-4 text-left font-medium">
+                          Description
+                        </th>
+                        <th className="py-3 px-4 text-left font-medium">Venue</th>
+                        <th className="py-3 px-4 text-left font-medium">Pax</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {event.agendaItems.map((item) => (
+                        <tr
+                          key={item.id}
+                          className="border-b border-border/30 transition-colors last:border-0 hover:bg-surface/40"
+                        >
+                          <td className="py-2.5 px-4 tabular-nums text-muted-foreground">
+                            {item.sequence}
+                          </td>
+                          <td className="py-2.5 px-4 whitespace-nowrap tabular-nums">
+                            {format(item.startTime, "HH:mm")} –{" "}
+                            {format(item.endTime, "HH:mm")}
+                          </td>
+                          <td className="py-2.5 px-4">{item.description}</td>
+                          <td className="py-2.5 px-4 text-muted-foreground">
+                            {item.venue?.name ?? item.venueText ?? "—"}
+                          </td>
+                          <td className="py-2.5 px-4 tabular-nums">
+                            {item.participants ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {showRequirements && (
+          <TabsContent value="departments" className="space-y-4">
+            {event.departments.map((ed) => {
+              const reqs = canFullView
+                ? ed.requirements
+                : ed.requirements.filter((r) => assignedReqIds.has(r.id));
+              if (!canFullView && reqs.length === 0) return null;
+
+              return (
+                <Card key={ed.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        {ed.department.name}
+                      </CardTitle>
+                      {(canEdit || managedDeptIds.includes(ed.departmentId)) && (
+                        <Button asChild size="sm" variant="ghost">
+                          <Link
+                            href={`/events/${eventId}/requirements/${ed.departmentId}`}
+                          >
+                            Edit
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {reqs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No requirements yet.
+                      </p>
+                    ) : (
+                      reqs.map((req) => {
+                        const visibleNotes = req.managerNotes.filter(
+                          (n) =>
+                            isAdmin(u) ||
+                            event.coordinatorId === u.id ||
+                            n.author.id === u.id,
+                        );
+                        const priorityClass =
+                          req.priority === "HIGH" || req.priority === "URGENT"
+                            ? "border-l-destructive"
+                            : req.priority === "MEDIUM"
+                            ? "border-l-accent"
+                            : "border-l-border";
+                        return (
+                          <div
+                            key={req.id}
+                            className={`glass-subtle rounded-md border-l-4 p-3 space-y-2 ${priorityClass}`}
+                          >
+                            <p className="text-sm whitespace-pre-wrap">
+                              {req.description}
+                            </p>
+                            {req.priority && (
+                              <Badge variant="outline" className="text-xs">
+                                {req.priority}
+                              </Badge>
+                            )}
+                            {req.assignments.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 text-xs">
+                                <Users className="h-3 w-3 text-muted-foreground" />
+                                {req.assignments.map((a) => (
+                                  <span
+                                    key={a.userId}
+                                    className="rounded-full bg-primary/10 text-primary px-2 py-0.5"
+                                  >
+                                    {a.user.displayName}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {visibleNotes.length > 0 && (
+                              <div className="space-y-1 border-t border-border/40 pt-2">
+                                {visibleNotes.map((n) => (
+                                  <div
+                                    key={n.id}
+                                    className="rounded-md border border-accent/30 bg-accent/10 p-2 text-xs"
+                                  >
+                                    <span className="font-medium">
+                                      {n.author.displayName}:
+                                    </span>{" "}
+                                    {n.body}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </TabsContent>
+        )}
+
+        {(canEdit || event.attachments.length > 0) && (
+          <TabsContent value="attachments">
+            <Card>
+              <CardContent className="p-6">
+                <AttachmentPanel
+                  attachments={event.attachments.map((a) => ({
+                    id: a.id,
+                    fileName: a.fileName,
+                    byteSize: a.byteSize,
+                    storageKey: a.storageKey,
+                    createdAt: a.createdAt.toISOString(),
+                    uploadedBy: a.uploadedBy,
+                  }))}
+                  scope={{ eventId }}
+                  canUpload={canEdit}
+                  canDelete={canEdit}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }

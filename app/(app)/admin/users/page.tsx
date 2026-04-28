@@ -3,9 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/authz";
 import type { SessionUser } from "@/lib/authz";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { CreateUserForm } from "@/components/admin/create-user-form";
+import { UsersTable, type UserRow } from "@/components/admin/users-table";
 
 export default async function AdminUsersPage() {
   const session = await auth();
@@ -13,48 +12,41 @@ export default async function AdminUsersPage() {
   if (!isAdmin(u)) redirect("/dashboard");
 
   const users = await prisma.user.findMany({
-    include: { roles: true, departmentMemberships: { include: { department: true } } },
+    include: {
+      roles: true,
+      departmentMemberships: { include: { department: true } },
+    },
     orderBy: { displayName: "asc" },
   });
 
+  const rows: UserRow[] = users.map((user) => ({
+    id: user.id,
+    displayName: user.displayName,
+    email: user.email,
+    isActive: user.isActive,
+    roles: user.roles.map((r) => r.role),
+    departments: user.departmentMemberships.map((m) => ({
+      name: m.department.name,
+      isManager: m.isManager,
+    })),
+  }));
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Users</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Admin
+          </p>
+          <h1 className="mt-1 text-display">Users</h1>
+          <p className="text-sm text-muted-foreground">
+            {users.length} user{users.length === 1 ? "" : "s"}
+          </p>
+        </div>
         <CreateUserForm />
       </div>
-      <div className="grid gap-4">
-        {users.map((user) => (
-          <Card key={user.id}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{user.displayName}</CardTitle>
-                <span className={`text-xs ${user.isActive ? "text-green-600" : "text-muted-foreground line-through"}`}>
-                  {user.isActive ? "Active" : "Deactivated"}
-                </span>
-              </div>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {user.roles.map((r) => (
-                  <Badge key={r.id} variant="secondary">{r.role}</Badge>
-                ))}
-                {user.departmentMemberships.map((m) => (
-                  <Badge key={m.id} variant="outline">
-                    {m.department.name} {m.isManager ? "(manager)" : ""}
-                  </Badge>
-                ))}
-              </div>
-              <div className="mt-3 flex gap-2">
-                <a href={`/admin/users/${user.id}`} className="text-sm text-primary underline">
-                  Manage
-                </a>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
+      <UsersTable users={rows} />
     </div>
   );
 }

@@ -19,8 +19,16 @@ export default async function NotificationsPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Notifications</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Inbox
+          </p>
+          <h1 className="mt-1 text-display">Notifications</h1>
+          <p className="text-sm text-muted-foreground">
+            {unread.length} unread · {notifications.length} total
+          </p>
+        </div>
         {unread.length > 0 && <MarkReadButton ids={unread.map((n) => n.id)} />}
       </div>
       {notifications.length === 0 && <p className="text-muted-foreground">No notifications yet.</p>}

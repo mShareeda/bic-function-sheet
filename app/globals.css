@@ -4,33 +4,202 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 222 30% 97%;
     --foreground: 222 47% 11%;
+
+    --surface: 0 0% 100%;
+    --surface-strong: 0 0% 100%;
+    --surface-alpha: 0.55;
+    --surface-strong-alpha: 0.78;
+
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 0 84% 45%;
+
+    --primary: 0 78% 48%;
     --primary-foreground: 0 0% 100%;
     --secondary: 210 40% 96%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 45 95% 55%;
     --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
+
+    --border: 220 20% 88%;
     --input: 214 32% 91%;
-    --ring: 0 84% 45%;
-    --radius: 0.5rem;
+    --ring: 0 78% 48%;
+    --radius: 0.75rem;
+
+    --status-draft: 215 16% 47%;
+    --status-confirmed: 217 91% 56%;
+    --status-sent: 262 83% 58%;
+    --status-live: 152 70% 40%;
+    --status-closed: 220 9% 46%;
+
+    --gradient-bg: linear-gradient(
+      135deg,
+      hsl(0 70% 97%) 0%,
+      hsl(220 40% 96%) 50%,
+      hsl(45 60% 96%) 100%
+    );
+
+    --shadow-glass: 0 8px 32px hsl(220 40% 20% / 0.08),
+      inset 0 1px 0 hsl(0 0% 100% / 0.5);
+    --shadow-glass-lg: 0 20px 48px hsl(220 40% 20% / 0.12),
+      inset 0 1px 0 hsl(0 0% 100% / 0.6);
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 220 20% 96%;
+
+    --surface: 220 28% 14%;
+    --surface-strong: 220 28% 16%;
+    --surface-alpha: 0.55;
+    --surface-strong-alpha: 0.82;
+
+    --card: 220 28% 14%;
+    --card-foreground: 220 20% 96%;
+    --popover: 220 28% 14%;
+    --popover-foreground: 220 20% 96%;
+
+    --primary: 0 84% 58%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 20% 18%;
+    --secondary-foreground: 220 20% 96%;
+    --muted: 220 20% 18%;
+    --muted-foreground: 220 14% 70%;
+    --accent: 45 95% 60%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 24%;
+    --input: 220 20% 24%;
+    --ring: 0 84% 58%;
+
+    --status-draft: 220 14% 60%;
+    --status-confirmed: 217 91% 65%;
+    --status-sent: 262 83% 68%;
+    --status-live: 152 60% 50%;
+    --status-closed: 220 9% 55%;
+
+    --gradient-bg: linear-gradient(
+      135deg,
+      hsl(222 47% 6%) 0%,
+      hsl(220 40% 9%) 50%,
+      hsl(0 30% 8%) 100%
+    );
+
+    --shadow-glass: 0 8px 32px hsl(220 60% 2% / 0.5),
+      inset 0 1px 0 hsl(0 0% 100% / 0.06);
+    --shadow-glass-lg: 0 20px 48px hsl(220 60% 2% / 0.6),
+      inset 0 1px 0 hsl(0 0% 100% / 0.08);
   }
 
   * {
     @apply border-border;
   }
+
+  html,
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01";
+    min-height: 100dvh;
+  }
+
+  body {
+    @apply text-foreground;
+    background: hsl(var(--background));
+    background-image: var(--gradient-bg);
+    background-attachment: fixed;
+    font-feature-settings: "cv11", "ss01", "tnum";
+  }
+}
+
+@layer components {
+  .glass {
+    background-color: hsl(var(--surface) / var(--surface-alpha));
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid hsl(var(--border) / 0.6);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-strong {
+    background-color: hsl(var(--surface-strong) / var(--surface-strong-alpha));
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid hsl(var(--border) / 0.7);
+    box-shadow: var(--shadow-glass-lg);
+  }
+
+  .glass-subtle {
+    background-color: hsl(var(--surface) / 0.35);
+    backdrop-filter: blur(10px) saturate(130%);
+    -webkit-backdrop-filter: blur(10px) saturate(130%);
+    border: 1px solid hsl(var(--border) / 0.4);
+  }
+
+  .focus-ring {
+    @apply outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .text-display {
+    font-size: 2rem;
+    line-height: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .text-h1 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  .text-h2 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .text-meta {
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .glass,
+  .glass-strong,
+  .glass-subtle {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }

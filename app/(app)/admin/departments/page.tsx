@@ -17,8 +17,16 @@ export default async function AdminDeptsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Departments</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Admin
+          </p>
+          <h1 className="mt-1 text-display">Departments</h1>
+          <p className="text-sm text-muted-foreground">
+            {depts.length} department{depts.length === 1 ? "" : "s"}
+          </p>
+        </div>
         <CreateDeptForm />
       </div>
       <div className="grid gap-2">

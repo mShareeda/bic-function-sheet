@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { updateEventStatusAction, sendFunctionSheetAction } from "@/server/actions/events";
 
@@ -50,7 +51,12 @@ export function StatusChanger({ eventId, currentStatus }: { eventId: string; cur
       onClick={advance}
       disabled={pending}
     >
-      {pending ? "…" : label}
+      {pending ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <ArrowRight className="h-3.5 w-3.5" />
+      )}
+      {label}
     </Button>
   );
 }
