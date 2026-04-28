@@ -16,12 +16,8 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { format, addDays } from "date-fns";
 import type { EventStatus } from "@prisma/client";
 import {
-  CalendarClock,
-  AlertTriangle,
-  BellRing,
   ListChecks,
   Plus,
-  Sparkles,
   ArrowUpRight,
   CalendarX,
 } from "lucide-react";
@@ -40,20 +36,18 @@ function StatCard({
   label,
   value,
   sub,
-  icon: Icon,
   tone = "primary",
 }: {
   label: string;
   value: number;
   sub: string;
-  icon: React.ComponentType<{ className?: string }>;
   tone?: "primary" | "live" | "warning" | "info";
 }) {
   const toneClass = {
-    primary: "from-primary/10 to-primary/0 text-primary",
-    live: "from-status-live/15 to-status-live/0 text-status-live",
-    warning: "from-accent/20 to-accent/0 text-accent-foreground",
-    info: "from-status-confirmed/10 to-status-confirmed/0 text-status-confirmed",
+    primary: "from-primary/10 to-primary/0",
+    live: "from-status-live/15 to-status-live/0",
+    warning: "from-accent/20 to-accent/0",
+    info: "from-status-confirmed/10 to-status-confirmed/0",
   }[tone];
 
   return (
@@ -62,21 +56,14 @@ function StatCard({
         aria-hidden
         className={`absolute -right-6 -top-6 h-32 w-32 rounded-full bg-gradient-to-br ${toneClass} blur-2xl opacity-60`}
       />
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
-          </p>
-          <p className="text-3xl font-bold tabular-nums tracking-tight">
-            {value}
-          </p>
-          <p className="text-xs text-muted-foreground">{sub}</p>
-        </div>
-        <div
-          className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${toneClass.split(" ").slice(-1)} bg-surface/60 ring-1 ring-border/40`}
-        >
-          <Icon className="h-5 w-5" />
-        </div>
+      <div className="relative space-y-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p className="text-3xl font-bold tabular-nums tracking-tight">
+          {value}
+        </p>
+        <p className="text-xs text-muted-foreground">{sub}</p>
       </div>
     </Card>
   );
@@ -203,8 +190,7 @@ function PageHeader({
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <p className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5 text-accent" />
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Dashboard
         </p>
         <h1 className="mt-1 text-display">{greeting}</h1>
@@ -292,28 +278,24 @@ export default async function DashboardPage() {
             label="Upcoming (30d)"
             value={upcomingEvents.length}
             sub="Active events ahead"
-            icon={CalendarClock}
             tone="primary"
           />
           <StatCard
             label="Live now"
             value={liveCount}
             sub="Currently running"
-            icon={Sparkles}
             tone="live"
           />
           <StatCard
             label="Unassigned"
             value={unassignedReqs.length}
             sub="Requirements with no owner"
-            icon={AlertTriangle}
             tone="warning"
           />
           <StatCard
             label="Unread alerts"
             value={unreadCount}
             sub="Notifications waiting"
-            icon={BellRing}
             tone="info"
           />
         </div>
@@ -487,21 +469,18 @@ export default async function DashboardPage() {
             label="Upcoming events"
             value={upcomingEvents.length}
             sub="In your departments"
-            icon={CalendarClock}
             tone="primary"
           />
           <StatCard
             label="Unassigned"
             value={unassignedReqs.length}
             sub="Needing a team member"
-            icon={AlertTriangle}
             tone="warning"
           />
           <StatCard
             label="My tasks"
             value={myAssignments.length}
             sub="Assigned to you"
-            icon={ListChecks}
             tone="info"
           />
         </div>
@@ -658,14 +637,12 @@ export default async function DashboardPage() {
           label="Upcoming events"
           value={byEvent.size}
           sub="Events you have tasks in"
-          icon={CalendarClock}
           tone="primary"
         />
         <StatCard
           label="Total tasks"
           value={assignments.length}
           sub="Requirements assigned to you"
-          icon={ListChecks}
           tone="info"
         />
       </div>
