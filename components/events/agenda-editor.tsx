@@ -10,7 +10,7 @@ import { format } from "date-fns";
 
 type AgendaItem = {
   id: string; sequence: number; startTime: Date; endTime: Date;
-  description: string; participants: number | null;
+  description: string;
   venueId: string | null; venueText: string | null;
   venue: { id: string; name: string } | null;
 };
@@ -68,7 +68,6 @@ export function AgendaEditor({ eventId, agendaItems, venues }: { eventId: string
                   <p className="text-sm text-muted-foreground">
                     {format(item.startTime, "HH:mm")} – {format(item.endTime, "HH:mm")}
                     {(item.venue?.name ?? item.venueText) && ` · ${item.venue?.name ?? item.venueText}`}
-                    {item.participants && ` · ${item.participants} pax`}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -132,13 +131,9 @@ function ItemForm({
             {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 sm:col-span-2">
           <Label className="text-xs">Custom venue (if no selection above)</Label>
           <Input name="venueText" defaultValue={item?.venueText ?? ""} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Participants</Label>
-          <Input name="participants" type="number" min={0} defaultValue={item?.participants ?? ""} />
         </div>
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { RoleName } from "@prisma/client";
-import { Menu, Search, Flag, LogOut, ChevronRight } from "lucide-react";
+import { Menu, Flag, LogOut, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -134,21 +134,6 @@ export function TopBar({ user }: Props) {
       </nav>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="hidden md:inline-flex h-9 gap-2 px-3 text-muted-foreground"
-          onClick={() => {
-            // Placeholder - global search hook-up can come later
-          }}
-        >
-          <Search className="h-4 w-4" />
-          <span className="text-xs">Search</span>
-          <kbd className="ml-2 hidden lg:inline-block rounded border border-border/60 bg-surface/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            ⌘K
-          </kbd>
-        </Button>
-
         <ThemeToggle />
 
         <div className="relative" ref={userMenuRef}>

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import type { AuditEventGroup, AuditEntry } from "@/app/(app)/admin/audit/page";
+
+const TS_FORMAT = "yyyy-MM-dd HH:mm";
 
 function AuditEntryRow({ entry }: { entry: AuditEntry }) {
   return (
@@ -15,9 +17,9 @@ function AuditEntryRow({ entry }: { entry: AuditEntry }) {
       {entry.message && (
         <span className="text-muted-foreground text-xs">{entry.message}</span>
       )}
-      <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+      <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap tabular-nums">
         {entry.actorName ?? "system"} ·{" "}
-        {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+        {format(new Date(entry.createdAt), TS_FORMAT)}
       </span>
     </div>
   );
@@ -45,8 +47,8 @@ function EventGroup({ group }: { group: AuditEventGroup }) {
           </span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className="text-xs text-muted-foreground hidden sm:block">
-            {formatDistanceToNow(new Date(group.latestAt), { addSuffix: true })}
+          <span className="text-xs text-muted-foreground hidden sm:block tabular-nums">
+            {format(new Date(group.latestAt), TS_FORMAT)}
           </span>
           <span className="text-muted-foreground text-sm">{expanded ? "▲" : "▼"}</span>
         </div>

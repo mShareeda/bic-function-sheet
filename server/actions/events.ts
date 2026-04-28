@@ -195,6 +195,161 @@ export async function sendFunctionSheetAction(eventId: string): Promise<ActionRe
   return updateEventStatusAction(eventId, "FUNCTION_SHEET_SENT");
 }
 
+// ── Wizard: create event end-to-end (details + schedule + agenda + departments + reqs) ──
+
+const wizardAgendaSchema = z.object({
+  description: z.string().min(1),
+  startTime: z.string().min(1),
+  endTime: z.string().min(1),
+  venueId: z.string().nullable().optional(),
+  venueText: z.string().nullable().optional(),
+});
+
+const wizardDepartmentSchema = z.object({
+  departmentId: z.string().min(1),
+  requirements: z.string().optional(),
+});
+
+const wizardSchema = z.object({
+  title: z.string().min(2),
+  eventDate: z.string().min(1),
+  confirmationReceived: z.string().nullable().optional(),
+  coordinatorId: z.string().nullable().optional(),
+  salespersonName: z.string().nullable().optional(),
+  maximizerNumber: z.string().nullable().optional(),
+  isVip: z.boolean().optional(),
+  estimatedGuests: z.number().int().nullable().optional(),
+  clientName: z.string().nullable().optional(),
+  clientContact: z.string().nullable().optional(),
+  setupStart: z.string().min(1),
+  setupEnd: z.string().min(1),
+  liveStart: z.string().min(1),
+  liveEnd: z.string().min(1),
+  breakdownStart: z.string().min(1),
+  breakdownEnd: z.string().min(1),
+  agenda: z.array(wizardAgendaSchema),
+  departments: z.array(wizardDepartmentSchema),
+  publishAndSend: z.boolean().optional(),
+});
+
+export type WizardPayload = z.infer<typeof wizardSchema>;
+
+export async function createEventCompleteAction(
+  payload: WizardPayload,
+): Promise<ActionResult> {
+  const actor = await requireSession();
+  if (!canCreateEvent(actor)) return { ok: false, error: "Not allowed." };
+
+  const parsed = wizardSchema.safeParse(payload);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+  const d = parsed.data;
+  const coordId = d.coordinatorId || null;
+
+  const event = await prisma.$transaction(async (tx) => {
+    const created = await tx.event.create({
+      data: {
+        title: d.title,
+        eventDate: new Date(d.eventDate),
+        confirmationReceived: d.confirmationReceived
+          ? new Date(d.confirmationReceived)
+          : null,
+        coordinatorId: coordId,
+        salespersonName: d.salespersonName || null,
+        maximizerNumber: d.maximizerNumber || null,
+        isVip: !!d.isVip,
+        estimatedGuests: d.estimatedGuests ?? null,
+        clientName: d.clientName || null,
+        clientContact: d.clientContact || null,
+        setupStart: new Date(d.setupStart),
+        setupEnd: new Date(d.setupEnd),
+        liveStart: new Date(d.liveStart),
+        liveEnd: new Date(d.liveEnd),
+        breakdownStart: new Date(d.breakdownStart),
+        breakdownEnd: new Date(d.breakdownEnd),
+        createdById: actor.id,
+      },
+    });
+
+    if (d.agenda.length > 0) {
+      await tx.agendaItem.createMany({
+        data: d.agenda.map((a, i) => ({
+          eventId: created.id,
+          sequence: i + 1,
+          startTime: new Date(a.startTime),
+          endTime: new Date(a.endTime),
+          venueId: a.venueId || null,
+          venueText: a.venueText || null,
+          description: a.description,
+          participants: null,
+        })),
+      });
+    }
+
+    for (const dept of d.departments) {
+      const ed = await tx.eventDepartment.create({
+        data: { eventId: created.id, departmentId: dept.departmentId },
+      });
+      const reqText = dept.requirements?.trim();
+      if (reqText) {
+        await tx.departmentRequirement.create({
+          data: {
+            eventId: created.id,
+            departmentId: dept.departmentId,
+            eventDepartmentId: ed.id,
+            description: reqText,
+            sortOrder: 0,
+            updatedById: actor.id,
+          },
+        });
+      }
+    }
+
+    return created;
+  });
+
+  await logAudit({
+    actorId: actor.id,
+    action: "CREATE",
+    entityType: "Event",
+    entityId: event.id,
+    eventId: event.id,
+  });
+
+  if (coordId && coordId !== actor.id) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    await notify({
+      userIds: [coordId],
+      type: "EVENT_ASSIGNED",
+      title: `You've been assigned as coordinator for: ${event.title}`,
+      body: `Event date: ${event.eventDate.toLocaleDateString()}`,
+      eventId: event.id,
+      url: `${appUrl}/events/${event.id}`,
+      sendEmail: true,
+      emailSubject: `[BIC] You're the coordinator for: ${event.title}`,
+      emailText: `You've been assigned as event coordinator for "${event.title}" on ${event.eventDate.toLocaleDateString()}.\n\nView it: ${appUrl}/events/${event.id}`,
+      emailHtml: `<p>You've been assigned as event coordinator for <strong>${event.title}</strong> on ${event.eventDate.toLocaleDateString()}.</p><p><a href="${appUrl}/events/${event.id}">View the event</a></p>`,
+    });
+  }
+
+  if (d.publishAndSend) {
+    await prisma.event.update({
+      where: { id: event.id },
+      data: {
+        status: "FUNCTION_SHEET_SENT",
+        functionSheetSentAt: new Date(),
+      },
+    });
+    await sendFunctionSheetNotifications(event.id, actor.id);
+  }
+
+  return { ok: true, id: event.id };
+}
+
 async function sendFunctionSheetNotifications(eventId: string, actorId: string) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },

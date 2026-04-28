@@ -303,7 +303,6 @@ export default async function EventPage({
                           Description
                         </th>
                         <th className="py-3 px-4 text-left font-medium">Venue</th>
-                        <th className="py-3 px-4 text-left font-medium">Pax</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -322,9 +321,6 @@ export default async function EventPage({
                           <td className="py-2.5 px-4">{item.description}</td>
                           <td className="py-2.5 px-4 text-muted-foreground">
                             {item.venue?.name ?? item.venueText ?? "—"}
-                          </td>
-                          <td className="py-2.5 px-4 tabular-nums">
-                            {item.participants ?? "—"}
                           </td>
                         </tr>
                       ))}

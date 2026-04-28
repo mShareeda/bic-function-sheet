@@ -14,7 +14,13 @@ export async function renderFunctionSheetPdf(eventId: string): Promise<Buffer> {
           department: true,
           requirements: {
             include: {
-              assignments: { include: { user: { select: { displayName: true } } } },
+              assignments: {
+                include: { user: { select: { displayName: true } } },
+              },
+              managerNotes: {
+                include: { author: { select: { displayName: true } } },
+                orderBy: { createdAt: "asc" },
+              },
             },
             orderBy: { sortOrder: "asc" },
           },
