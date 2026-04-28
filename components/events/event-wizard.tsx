@@ -479,7 +479,6 @@ function DetailsStep({
           <Input
             value={state.salespersonName}
             onChange={(e) => set("salespersonName", e.target.value)}
-            placeholder="e.g. Sara Al-Khalifa"
           />
         </Field>
         <Field label="Maximizer number">
