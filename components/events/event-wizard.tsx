@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
 import {
   Check,
   ChevronLeft,
@@ -79,33 +79,18 @@ function pad(n: number) {
   return n.toString().padStart(2, "0");
 }
 
-function toLocalDateTime(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours(),
-  )}:${pad(d.getMinutes())}`;
-}
-
 function toLocalDate(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function defaultDateTime(offsetDays: number, hour: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  d.setHours(hour, 0, 0, 0);
-  return toLocalDateTime(d);
-}
-
 function newAgendaItem(eventDate: string): AgendaDraft {
-  const base = eventDate
-    ? new Date(eventDate + "T19:00")
-    : new Date(defaultDateTime(1, 19));
-  const end = new Date(base.getTime() + 60 * 60 * 1000);
+  const baseDate = eventDate || toLocalDate(new Date());
+  const stamp = `${baseDate}T00:00`;
   return {
     key: crypto.randomUUID(),
     description: "",
-    startTime: toLocalDateTime(base),
-    endTime: toLocalDateTime(end),
+    startTime: stamp,
+    endTime: stamp,
     venueId: "",
     venueText: "",
   };
@@ -127,12 +112,13 @@ export function EventWizard({
   const [pending, startTransition] = React.useTransition();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
-  const initialEventDate = toLocalDate(addDays(new Date(), 7));
+  const today = toLocalDate(new Date());
+  const todayMidnight = `${today}T00:00`;
   const [state, setState] = React.useState<WizardState>(() => ({
     title: "",
-    eventDate: initialEventDate,
-    eventDateTime: `${initialEventDate}T19:00`,
-    confirmationReceived: "",
+    eventDate: today,
+    eventDateTime: todayMidnight,
+    confirmationReceived: todayMidnight,
     coordinatorId: "",
     salespersonName: "",
     maximizerNumber: "",
@@ -140,12 +126,12 @@ export function EventWizard({
     clientName: "",
     clientContact: "",
     isVip: false,
-    setupStart: defaultDateTime(7, 6),
-    setupEnd: defaultDateTime(7, 17),
-    liveStart: defaultDateTime(7, 19),
-    liveEnd: defaultDateTime(7, 23),
-    breakdownStart: defaultDateTime(7, 23),
-    breakdownEnd: defaultDateTime(8, 2),
+    setupStart: todayMidnight,
+    setupEnd: todayMidnight,
+    liveStart: todayMidnight,
+    liveEnd: todayMidnight,
+    breakdownStart: todayMidnight,
+    breakdownEnd: todayMidnight,
     agenda: [],
     departments: [],
   }));
@@ -439,7 +425,6 @@ function DetailsStep({
           <Input
             value={state.title}
             onChange={(e) => set("title", e.target.value)}
-            placeholder="e.g. Mercedes-AMG Hospitality Dinner"
             required
           />
         </Field>
@@ -485,7 +470,6 @@ function DetailsStep({
           <Input
             value={state.maximizerNumber}
             onChange={(e) => set("maximizerNumber", e.target.value)}
-            placeholder="e.g. 12345"
           />
         </Field>
         <Field label="Estimated guests">
@@ -506,7 +490,6 @@ function DetailsStep({
           <Input
             value={state.clientContact}
             onChange={(e) => set("clientContact", e.target.value)}
-            placeholder="phone or email"
           />
         </Field>
         <div className="sm:col-span-2">
@@ -692,7 +675,6 @@ function AgendaStep({
                 onChange={(e) =>
                   update(item.key, { description: e.target.value })
                 }
-                placeholder="e.g. Welcome reception & canapés"
                 required
               />
             </Field>
@@ -735,7 +717,6 @@ function AgendaStep({
                   onChange={(e) =>
                     update(item.key, { venueText: e.target.value, venueId: "" })
                   }
-                  placeholder="Custom location"
                 />
               </Field>
             </div>
@@ -835,7 +816,6 @@ function DepartmentsStep({
                       value={sel?.requirements ?? ""}
                       onChange={(e) => updateReq(d.id, e.target.value)}
                       rows={4}
-                      placeholder={`What does ${d.name} need to handle for this event?`}
                       className="mt-1.5 w-full rounded-md border border-border/60 bg-surface/50 backdrop-blur-glass px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                     />
                   </div>

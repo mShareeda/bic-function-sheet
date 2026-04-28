@@ -248,7 +248,7 @@ function InlineReqForm({
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Priority (optional)</Label>
-        <Input name="priority" defaultValue={req?.priority ?? ""} placeholder="e.g. High" className="h-8 text-sm" />
+        <Input name="priority" defaultValue={req?.priority ?? ""} className="h-8 text-sm" />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex gap-2">
