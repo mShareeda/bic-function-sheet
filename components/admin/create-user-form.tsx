@@ -1,0 +1,92 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { createUserAction } from "@/server/actions/admin";
+
+const ROLES = ["ADMIN", "COORDINATOR", "DEPT_MANAGER", "DEPT_TEAM_MEMBER"] as const;
+
+export function CreateUserForm() {
+  const [open, setOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [pendingData, setPendingData] = useState<FormData | null>(null);
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setPendingData(new FormData(e.currentTarget));
+    setConfirmOpen(true);
+  }
+
+  function onConfirm() {
+    if (!pendingData) return;
+    startTransition(async () => {
+      const r = await createUserAction(pendingData);
+      if (r.ok) {
+        setOpen(false);
+        setConfirmOpen(false);
+        setSuccess("User created successfully.");
+        setPendingData(null);
+        setTimeout(() => setSuccess(null), 4000);
+      } else {
+        setConfirmOpen(false);
+        setError(r.error);
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <div className="flex flex-col items-end gap-2">
+        {success && <p className="text-sm text-green-600">{success}</p>}
+        <Button size="sm" onClick={() => { setSuccess(null); setOpen(true); }}>New user</Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Create user?"
+        description={`Create a new user account? A temporary password will be emailed to the address provided.`}
+        confirmLabel="Create"
+        onConfirm={onConfirm}
+        pending={pending}
+      />
+      <form onSubmit={onSubmit} className="space-y-4 rounded-lg border bg-card p-4 w-full max-w-md">
+        <div className="space-y-2">
+          <Label htmlFor="cu-name">Full name</Label>
+          <Input id="cu-name" name="displayName" required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cu-email">Email</Label>
+          <Input id="cu-email" name="email" type="email" required />
+        </div>
+        <fieldset className="space-y-1">
+          <legend className="text-sm font-medium">Roles</legend>
+          <div className="flex flex-wrap gap-3">
+            {ROLES.map((r) => (
+              <label key={r} className="flex items-center gap-1 text-sm">
+                <input type="checkbox" name="roles" value={r} />
+                {r}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" disabled={pending}>{pending ? "Creating…" : "Create"}</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+        </div>
+      </form>
+    </>
+  );
+}

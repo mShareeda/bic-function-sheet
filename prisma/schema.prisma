@@ -1,0 +1,357 @@
+// BIC's Function Sheet — Prisma schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================
+// Enums
+// =====================
+
+enum RoleName {
+  ADMIN
+  COORDINATOR
+  DEPT_MANAGER
+  DEPT_TEAM_MEMBER
+}
+
+enum EventStatus {
+  DRAFT
+  CONFIRMED
+  FUNCTION_SHEET_SENT
+  IN_SETUP
+  LIVE
+  CLOSED
+  ARCHIVED
+}
+
+enum NotificationType {
+  EVENT_ASSIGNED
+  FUNCTION_SHEET_SENT
+  FUNCTION_SHEET_UPDATED
+  REQUIREMENT_ASSIGNED
+  REQUIREMENT_UPDATED
+  MANAGER_NOTE_ADDED
+  STATUS_CHANGED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  SEND_FUNCTION_SHEET
+  ASSIGN
+  UNASSIGN
+  LOGIN
+  PASSWORD_RESET
+}
+
+// =====================
+// Users & Auth
+// =====================
+
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  displayName         String
+  passwordHash        String?  // null if SSO-only later
+  azureOid            String?  @unique // populated only after M365 SSO is enabled
+  isActive            Boolean  @default(true)
+  mustChangePassword  Boolean  @default(false)
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  roles                  UserRole[]
+  departmentMemberships  DepartmentMember[]
+  coordinatedEvents      Event[]                @relation("CoordinatorEvents")
+  createdEvents          Event[]                @relation("CreatedEvents")
+  assignedRequirements   RequirementAssignment[] @relation("RequirementAssignee")
+  assignmentsCreated     RequirementAssignment[] @relation("RequirementAssigner")
+  authoredNotes          RequirementNote[]
+  uploadedAttachments    Attachment[]
+  notifications          Notification[]
+  auditEntries           AuditLog[]
+  passwordResetTokens    PasswordResetToken[]
+
+  @@index([email])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserRole {
+  id     String   @id @default(cuid())
+  userId String
+  role   RoleName
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@index([role])
+}
+
+// =====================
+// Departments & Venues
+// =====================
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  members      DepartmentMember[]
+  events       EventDepartment[]
+  requirements DepartmentRequirement[]
+}
+
+model DepartmentMember {
+  id           String   @id @default(cuid())
+  userId       String
+  departmentId String
+  isManager    Boolean  @default(false)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, departmentId])
+  @@index([departmentId, isManager])
+}
+
+model Venue {
+  id       String   @id @default(cuid())
+  name     String   @unique
+  isActive Boolean  @default(true)
+
+  agenda      AgendaItem[]
+  eventVenues EventVenue[]
+}
+
+model EventVenue {
+  id        String   @id @default(cuid())
+  eventId   String
+  venueId   String
+  addedAt   DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  @@unique([eventId, venueId])
+  @@index([eventId])
+}
+
+// =====================
+// Events
+// =====================
+
+model Event {
+  id                    String      @id @default(cuid())
+  title                 String
+  status                EventStatus @default(DRAFT)
+  eventDate             DateTime
+  confirmationReceived  DateTime?
+  coordinatorId         String?
+  salespersonName       String?
+  maximizerNumber       String?
+  isVip                 Boolean     @default(false)
+  estimatedGuests       Int?
+  clientName            String?
+  clientContact         String?
+
+  setupStart            DateTime
+  setupEnd              DateTime
+  liveStart             DateTime
+  liveEnd               DateTime
+  breakdownStart        DateTime
+  breakdownEnd          DateTime
+
+  functionSheetSentAt   DateTime?
+  lastEditedAfterSendAt DateTime?
+
+  createdById           String
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  coordinator  User?                   @relation("CoordinatorEvents", fields: [coordinatorId], references: [id])
+  createdBy    User                    @relation("CreatedEvents", fields: [createdById], references: [id])
+  agendaItems  AgendaItem[]
+  departments  EventDepartment[]
+  requirements DepartmentRequirement[]
+  attachments  Attachment[]
+  eventVenues  EventVenue[]
+  auditLogs    AuditLog[]
+
+  @@index([eventDate])
+  @@index([status])
+  @@index([coordinatorId])
+}
+
+model AgendaItem {
+  id           String   @id @default(cuid())
+  eventId      String
+  sequence     Int
+  startTime    DateTime
+  endTime      DateTime
+  venueId      String?
+  venueText    String?
+  description  String
+  participants Int?
+
+  event Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  venue Venue? @relation(fields: [venueId], references: [id])
+
+  @@unique([eventId, sequence])
+  @@index([eventId])
+}
+
+model EventDepartment {
+  id           String   @id @default(cuid())
+  eventId      String
+  departmentId String
+  addedAt      DateTime @default(now())
+
+  event        Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  department   Department              @relation(fields: [departmentId], references: [id])
+  requirements DepartmentRequirement[]
+
+  @@unique([eventId, departmentId])
+  @@index([departmentId])
+}
+
+model DepartmentRequirement {
+  id                String   @id @default(cuid())
+  eventId           String
+  departmentId      String
+  eventDepartmentId String
+  description       String   @db.Text
+  priority          String?
+  sortOrder         Int      @default(0)
+  updatedAt         DateTime @updatedAt
+  updatedById       String?
+
+  event           Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  department      Department              @relation(fields: [departmentId], references: [id])
+  eventDepartment EventDepartment         @relation(fields: [eventDepartmentId], references: [id], onDelete: Cascade)
+  assignments     RequirementAssignment[]
+  managerNotes    RequirementNote[]
+  attachments     Attachment[]
+
+  @@index([eventId, departmentId])
+}
+
+model RequirementAssignment {
+  id            String   @id @default(cuid())
+  requirementId String
+  userId        String
+  assignedAt    DateTime @default(now())
+  assignedById  String
+
+  requirement DepartmentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  user        User                  @relation("RequirementAssignee", fields: [userId], references: [id])
+  assignedBy  User                  @relation("RequirementAssigner", fields: [assignedById], references: [id])
+
+  @@unique([requirementId, userId])
+  @@index([userId])
+}
+
+model RequirementNote {
+  id            String   @id @default(cuid())
+  requirementId String
+  authorId      String
+  body          String   @db.Text
+  createdAt     DateTime @default(now())
+
+  requirement DepartmentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  author      User                  @relation(fields: [authorId], references: [id])
+
+  @@index([requirementId])
+}
+
+// =====================
+// Attachments
+// Two nullable FKs (event vs requirement). Exactly one must be set
+// (enforced in app layer; could add a CHECK via migration if desired).
+// =====================
+
+model Attachment {
+  id            String   @id @default(cuid())
+  eventId       String?
+  requirementId String?
+  fileName      String
+  contentType   String
+  byteSize      Int
+  storageKey    String
+  uploadedById  String
+  createdAt     DateTime @default(now())
+
+  event       Event?                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  requirement DepartmentRequirement? @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  uploadedBy  User                   @relation(fields: [uploadedById], references: [id])
+
+  @@index([eventId])
+  @@index([requirementId])
+}
+
+// =====================
+// Notifications & Audit
+// =====================
+
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  type          NotificationType
+  title         String
+  body          String           @db.Text
+  eventId       String?
+  requirementId String?
+  url           String?
+  readAt        DateTime?
+  emailedAt     DateTime?
+  createdAt     DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([eventId])
+  @@index([emailedAt])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  action     AuditAction
+  entityType String
+  entityId   String
+  eventId    String?
+  diff       Json?
+  message    String?
+  createdAt  DateTime    @default(now())
+
+  actor User?  @relation(fields: [actorId], references: [id])
+  event Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([eventId])
+  @@index([createdAt])
+}
