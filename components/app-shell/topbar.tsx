@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { RoleName } from "@prisma/client";
-import { Menu, Flag, LogOut, ChevronRight } from "lucide-react";
+import { Menu, Flag, LogOut, ChevronRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -135,6 +135,7 @@ export function TopBar({ user }: Props) {
       </nav>
 
       <div className="ml-auto flex items-center gap-1.5">
+        <CommandTrigger />
         <ThemeToggle />
         <NotificationBell />
 
@@ -237,4 +238,23 @@ function humanize(seg: string) {
   return seg
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function CommandTrigger() {
+  function onClick() {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Open command palette (Cmd+K)"
+      className="focus-ring hidden sm:inline-flex items-center gap-2 h-8 px-3 rounded-md border border-border/50 bg-surface/40 text-xs text-muted-foreground hover:bg-surface/70 transition-colors"
+    >
+      <Search className="h-3 w-3" />
+      <span>Search</span>
+      <kbd className="ml-1 hidden md:inline text-[10px] font-medium opacity-60">⌘K</kbd>
+    </button>
+  );
 }

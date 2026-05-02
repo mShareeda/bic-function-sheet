@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { isAdmin, hasRole } from "@/lib/authz";
+import { isAdmin, hasRole, canCreateEvent } from "@/lib/authz";
 import type { SessionUser } from "@/lib/authz";
 import { CalendarTabs } from "@/components/calendar/calendar-tabs";
 
@@ -73,6 +73,16 @@ export default async function CalendarPage() {
     url: `/events/${ev.id}`,
   }));
 
+  const canCreate = canCreateEvent(u);
+
+  // Fetch coordinators for the quick-create dialog (only when user can create)
+  const coordinators = canCreate
+    ? await prisma.userRole.findMany({
+        where: { role: "COORDINATOR" },
+        select: { user: { select: { id: true, displayName: true } } },
+      }).then((rows) => rows.map((r) => r.user))
+    : [];
+
   return (
     <div className="space-y-6">
       <div>
@@ -85,7 +95,7 @@ export default async function CalendarPage() {
         </p>
       </div>
 
-      <CalendarTabs calEvents={calEvents} timelineEvents={timelineEvents} />
+      <CalendarTabs calEvents={calEvents} timelineEvents={timelineEvents} canCreate={canCreate} coordinators={coordinators} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { UserDeptForm } from "@/components/admin/user-dept-form";
 import { ToggleUserActiveButton } from "@/components/admin/toggle-user-active";
 import { ResetPasswordForm } from "@/components/admin/reset-password-form";
 import { DeleteUserButton } from "@/components/admin/delete-user-button";
+import { SsoApprovalButtons } from "@/components/admin/sso-approval-buttons";
 
 export default async function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params;
@@ -32,8 +33,23 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
 
   const isSelf = u.id === userId;
 
+  const isPendingApproval = !!user.ssoProvisionedAt && !user.isActive;
+
   return (
     <div className="space-y-6 max-w-2xl">
+      {isPendingApproval && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Pending approval — M365 sign-in</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              This user signed in via Microsoft 365 for the first time on{" "}
+              {user.ssoProvisionedAt!.toLocaleDateString()}. They cannot access the app until you approve them.
+            </p>
+          </div>
+          <SsoApprovalButtons userId={userId} userName={user.displayName} />
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{user.displayName}</h1>
@@ -42,7 +58,9 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
             <p className="text-xs text-amber-600 mt-1">⚠ Must change password on next login</p>
           )}
         </div>
-        <ToggleUserActiveButton userId={userId} userName={user.displayName} isActive={user.isActive} />
+        {!isPendingApproval && (
+          <ToggleUserActiveButton userId={userId} userName={user.displayName} isActive={user.isActive} />
+        )}
       </div>
 
       <Card>

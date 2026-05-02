@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 import { authConfig } from "@/auth.config";
+import { notify } from "@/lib/notifications";
 import type { RoleName } from "@prisma/client";
 import type { JWT } from "@auth/core/jwt";
 
@@ -139,6 +140,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const byOid = await prisma.user.findUnique({ where: { azureOid: oid } });
         if (byOid) {
+          if (!byOid.isActive) return "/auth-error?error=PendingApproval";
           await prisma.user.update({
             where: { id: byOid.id },
             data: { lastLoginAt: new Date() },
@@ -150,16 +152,41 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const byEmail = await prisma.user.findUnique({ where: { email } });
         if (byEmail) return false;
 
+        const now = new Date();
         const created = await prisma.user.create({
           data: {
             email,
             displayName: profile.name ?? email,
             azureOid: oid,
-            isActive: true,
-            lastLoginAt: new Date(),
+            isActive: false,
+            ssoProvisionedAt: now,
           },
         });
         (user as { id?: string }).id = created.id;
+
+        // Notify all admins so they can approve or reject the new user
+        const admins = await prisma.userRole.findMany({
+          where: { role: "ADMIN" },
+          select: { userId: true },
+        });
+        const adminIds = admins.map((a) => a.userId);
+        if (adminIds.length) {
+          const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+          await notify({
+            userIds: adminIds,
+            type: "SSO_PENDING_APPROVAL",
+            title: `New M365 user pending approval: ${created.displayName}`,
+            body: created.email,
+            url: `${appUrl}/admin/users/${created.id}`,
+            sendEmail: true,
+            emailSubject: `[BIC] New SSO user needs approval: ${created.email}`,
+            emailText: `A new user signed in via Microsoft 365 and needs your approval.\n\nName: ${created.displayName}\nEmail: ${created.email}\n\nApprove or reject: ${appUrl}/admin/users/${created.id}`,
+            emailHtml: `<p>A new user signed in via Microsoft 365 and needs your approval.</p><p><strong>Name:</strong> ${created.displayName}<br><strong>Email:</strong> ${created.email}</p><p><a href="${appUrl}/admin/users/${created.id}">Approve or reject</a></p>`,
+          });
+        }
+
+        // Block sign-in until approved — return "/auth-error" to redirect
+        return "/auth-error?error=PendingApproval";
       }
       return true;
     },

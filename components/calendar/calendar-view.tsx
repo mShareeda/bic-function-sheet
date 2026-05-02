@@ -1,12 +1,15 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventInput, EventClickArg } from "@fullcalendar/core";
+import type { DateClickArg } from "@fullcalendar/interaction";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
+import { QuickCreateEventDialog } from "@/components/events/quick-create-event-dialog";
 
 const STATUS_TOKEN: Record<string, string> = {
   draft: "var(--status-draft)",
@@ -30,9 +33,20 @@ const STATUS_LABEL: Record<string, string> = {
   archived: "Archived",
 };
 
-export function CalendarView({ events }: { events: EventInput[] }) {
+type Coordinator = { id: string; displayName: string };
+
+export function CalendarView({
+  events,
+  canCreate = false,
+  coordinators = [],
+}: {
+  events: EventInput[];
+  canCreate?: boolean;
+  coordinators?: Coordinator[];
+}) {
   const router = useRouter();
   const calRef = useRef<FullCalendar>(null);
+  const [quickCreateDate, setQuickCreateDate] = useState<string | null>(null);
 
   const colored = events.map((ev) => {
     const status = (ev.extendedProps?.status as string)?.toLowerCase() ?? "";
@@ -47,6 +61,11 @@ export function CalendarView({ events }: { events: EventInput[] }) {
       textColor: "#fff",
     };
   });
+
+  function handleDateClick(arg: DateClickArg) {
+    if (!canCreate) return;
+    setQuickCreateDate(format(arg.date, "yyyy-MM-dd"));
+  }
 
   return (
     <div className="glass rounded-lg p-4 space-y-4">
@@ -100,6 +119,7 @@ export function CalendarView({ events }: { events: EventInput[] }) {
           background: hsl(var(--primary) / 0.05);
           box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.15);
         }
+        ${canCreate ? ".fc .fc-daygrid-day-frame { cursor: pointer; } .fc .fc-daygrid-day-frame:hover { background: hsl(var(--primary) / 0.04); }" : ""}
         .fc-theme-standard td, .fc-theme-standard th { border-color: hsl(var(--border) / 0.4); }
         .fc .fc-popover {
           background: hsl(var(--surface-strong) / 0.88);
@@ -143,6 +163,7 @@ export function CalendarView({ events }: { events: EventInput[] }) {
             router.push(arg.event.url);
           }
         }}
+        dateClick={canCreate ? handleDateClick : undefined}
         dayMaxEvents={3}
       />
       <div className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-3 text-xs">
@@ -169,7 +190,20 @@ export function CalendarView({ events }: { events: EventInput[] }) {
           />
           VIP
         </span>
+        {canCreate && (
+          <span className="ml-auto text-muted-foreground/60 italic">
+            Click any date to create an event
+          </span>
+        )}
       </div>
+
+      {quickCreateDate && (
+        <QuickCreateEventDialog
+          date={quickCreateDate}
+          coordinators={coordinators}
+          onClose={() => setQuickCreateDate(null)}
+        />
+      )}
     </div>
   );
 }

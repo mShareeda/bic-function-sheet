@@ -213,12 +213,15 @@ export function EventWizard({
       if (!state.liveStart || !state.liveEnd) e.live = "Live window is required.";
       if (!state.breakdownStart || !state.breakdownEnd)
         e.breakdown = "Breakdown window is required.";
-      if (
-        new Date(state.setupEnd) <= new Date(state.setupStart) ||
-        new Date(state.liveEnd) <= new Date(state.liveStart) ||
-        new Date(state.breakdownEnd) <= new Date(state.breakdownStart)
-      )
-        e.windows = "End time must be after start time.";
+      if (state.setupStart && state.setupEnd && state.liveStart && state.liveEnd && state.breakdownStart && state.breakdownEnd) {
+        const ts = (s: string) => new Date(s).getTime();
+        const [ss, se, ls, le, bs, be] = [state.setupStart, state.setupEnd, state.liveStart, state.liveEnd, state.breakdownStart, state.breakdownEnd].map(ts);
+        if (ss >= se) e.setup = "Setup start must be before setup end.";
+        else if (se > ls) e.setup = "Setup end must not be after live start.";
+        if (ls >= le) e.live = "Live start must be before live end.";
+        else if (le > bs) e.live = "Live end must not be after breakdown start.";
+        if (bs >= be) e.breakdown = "Breakdown start must be before breakdown end.";
+      }
     }
     return e;
   }

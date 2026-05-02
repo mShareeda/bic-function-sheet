@@ -11,6 +11,7 @@ export type UserRow = {
   displayName: string;
   email: string;
   isActive: boolean;
+  ssoProvisionedAt: Date | null;
   roles: string[];
   departments: { name: string; isManager: boolean }[];
 };
@@ -43,7 +44,12 @@ const columns: Column<UserRow>[] = [
     key: "isActive",
     header: "Status",
     accessor: (u) =>
-      u.isActive ? (
+      u.ssoProvisionedAt && !u.isActive ? (
+        <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-amber-500 flex-shrink-0" />
+          Pending Approval
+        </span>
+      ) : u.isActive ? (
         <span className="inline-flex items-center gap-1 text-xs text-status-live font-medium">
           <CheckCircle2 className="h-3.5 w-3.5" /> Active
         </span>
@@ -52,7 +58,7 @@ const columns: Column<UserRow>[] = [
           <XCircle className="h-3.5 w-3.5" /> Deactivated
         </span>
       ),
-    sortValue: (u) => (u.isActive ? 0 : 1),
+    sortValue: (u) => (u.ssoProvisionedAt && !u.isActive ? -1 : u.isActive ? 0 : 1),
   },
   {
     key: "roles",

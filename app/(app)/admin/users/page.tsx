@@ -24,6 +24,7 @@ export default async function AdminUsersPage() {
     displayName: user.displayName,
     email: user.email,
     isActive: user.isActive,
+    ssoProvisionedAt: user.ssoProvisionedAt,
     roles: user.roles.map((r) => r.role),
     departments: user.departmentMemberships.map((m) => ({
       name: m.department.name,

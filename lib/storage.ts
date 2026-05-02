@@ -30,6 +30,16 @@ class LocalDiskStorage implements Storage {
     this.baseUrl = baseUrl;
   }
 
+  /** Resolve and validate that `key` stays within baseDir (prevents path traversal). */
+  private safeResolve(key: string): string {
+    const base = path.resolve(this.baseDir);
+    const resolved = path.resolve(path.join(this.baseDir, key));
+    if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+      throw new Error("Invalid storage key: path escapes storage directory");
+    }
+    return resolved;
+  }
+
   async getUploadDestination(key: string) {
     // For local storage, upload goes through a proxy route
     return {
@@ -43,18 +53,18 @@ class LocalDiskStorage implements Storage {
   }
 
   async delete(key: string) {
-    const filePath = path.join(this.baseDir, key);
+    const filePath = this.safeResolve(key);
     await fs.unlink(filePath).catch(() => {});
   }
 
   async writeFile(key: string, data: Buffer) {
-    const filePath = path.join(this.baseDir, key);
+    const filePath = this.safeResolve(key);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, data);
   }
 
   async readFile(key: string): Promise<Buffer> {
-    const filePath = path.join(this.baseDir, key);
+    const filePath = this.safeResolve(key);
     return fs.readFile(filePath);
   }
 }
