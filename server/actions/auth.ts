@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { AuthError } from "next-auth";
 import { signIn, signOut, auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -30,17 +31,23 @@ export async function signInAction(formData: FormData): Promise<ActionResult> {
   if (!parsed.success) return { ok: false, error: "Invalid email or password." };
 
   try {
+    // In NextAuth v5, signIn() from a server action always redirects on success.
+    // Use redirectTo (not redirect:false) and only catch AuthError for bad creds.
     await signIn("credentials", {
-      ...parsed.data,
-      redirect: false,
+      email: parsed.data.email,
+      password: parsed.data.password,
+      redirectTo: "/dashboard",
     });
   } catch (e) {
-    // Next.js redirect() throws internally — re-throw so the router handles it.
-    // Check both the v15 NEXT_REDIRECT digest and the AuthError class name.
-    if ((e as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) throw e;
-    return { ok: false, error: "Invalid email or password." };
+    // AuthError = invalid credentials from our authorize() callback
+    if (e instanceof AuthError) {
+      return { ok: false, error: "Invalid email or password." };
+    }
+    // Anything else (including the NEXT_REDIRECT thrown on success) must be re-thrown
+    throw e;
   }
-  redirect("/dashboard");
+  // Unreachable — signIn always throws (redirect) on success, but satisfies return type
+  return { ok: true };
 }
 
 export async function signOutAction(): Promise<void> {
