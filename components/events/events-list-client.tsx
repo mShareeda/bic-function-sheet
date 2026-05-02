@@ -124,12 +124,19 @@ export function EventsListClient({ events }: { events: EventListItem[] }) {
         </Card>
       ) : (
         <div className="grid gap-3">
-          {filtered.map((ev) => (
-            <Link key={ev.id} href={`/events/${ev.id}`} className="focus-ring block rounded-lg">
+          {filtered.map((ev, i) => (
+            <Link
+              key={ev.id}
+              href={`/events/${ev.id}`}
+              className="focus-ring block rounded-lg animate-fade-in-up"
+              style={{ animationDelay: `${i * 50}ms`, animationFillMode: "both" }}
+            >
               <Card
                 className={cn(
-                  "group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glass-lg",
-                  ev.isVip && "border-l-4 border-l-vip ring-1 ring-vip/20",
+                  "group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-glass-lg",
+                  ev.isVip
+                    ? "vip-shimmer border-l-4 border-l-vip ring-1 ring-vip/25 hover:ring-vip/40"
+                    : "",
                 )}
               >
                 <CardContent className="flex flex-wrap items-center gap-4 py-4">

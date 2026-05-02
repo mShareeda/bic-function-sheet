@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { VipBadge } from "@/components/ui/vip-badge";
+import { StatCard } from "@/components/ui/stat-card";
 import { format, addDays } from "date-fns";
 import type { EventStatus } from "@prisma/client";
 import {
@@ -32,43 +33,6 @@ const ACTIVE_STATUSES: EventStatus[] = [
 ];
 
 // ── Sub-components ───────────────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  sub,
-  tone = "primary",
-}: {
-  label: string;
-  value: number;
-  sub: string;
-  tone?: "primary" | "live" | "warning" | "info";
-}) {
-  const toneClass = {
-    primary: "from-primary/10 to-primary/0",
-    live: "from-status-live/15 to-status-live/0",
-    warning: "from-accent/20 to-accent/0",
-    info: "from-status-confirmed/10 to-status-confirmed/0",
-  }[tone];
-
-  return (
-    <Card className="relative overflow-hidden p-5">
-      <div
-        aria-hidden
-        className={`absolute -right-6 -top-6 h-32 w-32 rounded-full bg-gradient-to-br ${toneClass} blur-2xl opacity-60`}
-      />
-      <div className="relative space-y-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <p className="text-3xl font-bold tabular-nums tracking-tight">
-          {value}
-        </p>
-        <p className="text-xs text-muted-foreground">{sub}</p>
-      </div>
-    </Card>
-  );
-}
 
 function EventRow({
   id,
@@ -293,24 +257,28 @@ export default async function DashboardPage() {
             value={upcomingEvents.length}
             sub="Active events ahead"
             tone="primary"
+            delay={0}
           />
           <StatCard
             label="Live now"
             value={liveCount}
             sub="Currently running"
             tone="live"
+            delay={80}
           />
           <StatCard
             label="Unassigned"
             value={unassignedReqs.length}
             sub="Requirements with no owner"
             tone="warning"
+            delay={160}
           />
           <StatCard
             label="Unread alerts"
             value={unreadCount}
             sub="Notifications waiting"
             tone="info"
+            delay={240}
           />
         </div>
 
@@ -485,18 +453,21 @@ export default async function DashboardPage() {
             value={upcomingEvents.length}
             sub="In your departments"
             tone="primary"
+            delay={0}
           />
           <StatCard
             label="Unassigned"
             value={unassignedReqs.length}
             sub="Needing a team member"
             tone="warning"
+            delay={80}
           />
           <StatCard
             label="My tasks"
             value={myAssignments.length}
             sub="Assigned to you"
             tone="info"
+            delay={160}
           />
         </div>
 
@@ -654,12 +625,14 @@ export default async function DashboardPage() {
           value={byEvent.size}
           sub="Events you have tasks in"
           tone="primary"
+          delay={0}
         />
         <StatCard
           label="Total tasks"
           value={assignments.length}
           sub="Requirements assigned to you"
           tone="info"
+          delay={80}
         />
       </div>
 

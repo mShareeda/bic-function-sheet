@@ -38,11 +38,16 @@ export function generateTempPassword(length = 14): string {
 }
 
 export function generateResetToken(): { token: string; tokenHash: string } {
+  // 32 random bytes → 256 bits of entropy via base64url. Timing-safe because
+  // verification uses a DB key lookup on the hash (no string comparison).
   const token = randomBytes(32).toString("base64url");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   return { token, tokenHash };
 }
 
 export function hashResetToken(token: string): string {
+  // SHA-256 is intentionally fast here — this is a lookup key, not a password
+  // hash. Security comes from the 256-bit token entropy and the single-use +
+  // expiry enforcement in resetPasswordAction, not from hash slowness.
   return createHash("sha256").update(token).digest("hex");
 }

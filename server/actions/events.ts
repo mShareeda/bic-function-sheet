@@ -170,21 +170,41 @@ export async function updateEventStatusAction(
   if (!event) return { ok: false, error: "Not found." };
   if (!canEditEvent(actor, event)) return { ok: false, error: "Not allowed." };
 
-  const validStatuses = ["DRAFT","CONFIRMED","FUNCTION_SHEET_SENT","IN_SETUP","LIVE","CLOSED","ARCHIVED"] as const;
+  const validStatuses = [
+    "DRAFT","CONFIRMED","PROVISIONAL_FUNCTION_SHEET_SENT",
+    "FUNCTION_SHEET_SENT","IN_SETUP","LIVE","CLOSED","ARCHIVED",
+  ] as const;
   if (!validStatuses.includes(status as (typeof validStatuses)[number])) return { ok: false, error: "Invalid status." };
 
   const updated = await prisma.event.update({
     where: { id: eventId },
     data: {
       status: status as typeof validStatuses[number],
-      ...(status === "FUNCTION_SHEET_SENT" && !event.functionSheetSentAt ? { functionSheetSentAt: new Date() } : {}),
+      // Record first send (provisional or final)
+      ...(
+        (status === "PROVISIONAL_FUNCTION_SHEET_SENT" || status === "FUNCTION_SHEET_SENT") &&
+        !event.functionSheetSentAt
+          ? { functionSheetSentAt: new Date() }
+          : {}
+      ),
     },
   });
 
   await logAudit({ actorId: actor.id, action: "STATUS_CHANGE", entityType: "Event", entityId: eventId, eventId, diff: { status: { before: event.status, after: status } } });
 
-  if (status === "FUNCTION_SHEET_SENT") {
-    await sendFunctionSheetNotifications(eventId, actor.id);
+  if (status === "PROVISIONAL_FUNCTION_SHEET_SENT") {
+    await sendFunctionSheetNotifications(eventId, actor.id, true);
+  } else if (status === "FUNCTION_SHEET_SENT") {
+    if (event.status === "PROVISIONAL_FUNCTION_SHEET_SENT") {
+      // Upgrading from provisional → final: notify update
+      await notifyFunctionSheetUpdated(
+        eventId,
+        `Provisional function sheet confirmed as final by ${actor.displayName}`,
+        actor.id,
+      );
+    } else {
+      await sendFunctionSheetNotifications(eventId, actor.id, false);
+    }
   }
 
   revalidatePath(`/events/${eventId}`);
@@ -193,6 +213,10 @@ export async function updateEventStatusAction(
 
 export async function sendFunctionSheetAction(eventId: string): Promise<ActionResult> {
   return updateEventStatusAction(eventId, "FUNCTION_SHEET_SENT");
+}
+
+export async function sendProvisionalFunctionSheetAction(eventId: string): Promise<ActionResult> {
+  return updateEventStatusAction(eventId, "PROVISIONAL_FUNCTION_SHEET_SENT");
 }
 
 // ── Wizard: create event end-to-end (details + schedule + agenda + departments + reqs) ──
@@ -350,7 +374,7 @@ export async function createEventCompleteAction(
   return { ok: true, id: event.id };
 }
 
-async function sendFunctionSheetNotifications(eventId: string, actorId: string) {
+async function sendFunctionSheetNotifications(eventId: string, actorId: string, provisional = false) {
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: {
@@ -370,17 +394,22 @@ async function sendFunctionSheetNotifications(eventId: string, actorId: string) 
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const url = `${appUrl}/events/${eventId}`;
 
+  const docLabel = provisional ? "Provisional function sheet" : "Function sheet";
+  const provisionalNote = provisional
+    ? " This is a provisional sheet — details may change before the final version is issued."
+    : "";
+
   await notify({
     userIds: managerIds,
     type: "FUNCTION_SHEET_SENT",
-    title: `Function sheet sent: ${event.title}`,
-    body: `Event date: ${event.eventDate.toLocaleDateString()}`,
+    title: `${docLabel} sent: ${event.title}`,
+    body: `Event date: ${event.eventDate.toLocaleDateString()}${provisionalNote}`,
     eventId,
     url,
     sendEmail: true,
-    emailSubject: `[BIC] Function sheet: ${event.title}`,
-    emailText: `The function sheet for "${event.title}" (${event.eventDate.toLocaleDateString()}) has been sent to your department.\n\nView it: ${url}`,
-    emailHtml: `<p>The function sheet for <strong>${event.title}</strong> (${event.eventDate.toLocaleDateString()}) has been sent to your department.</p><p><a href="${url}">View the function sheet</a></p>`,
+    emailSubject: `[BIC] ${docLabel}: ${event.title}`,
+    emailText: `The ${docLabel.toLowerCase()} for "${event.title}" (${event.eventDate.toLocaleDateString()}) has been sent to your department.${provisionalNote}\n\nView it: ${url}`,
+    emailHtml: `<p>The ${docLabel.toLowerCase()} for <strong>${event.title}</strong> (${event.eventDate.toLocaleDateString()}) has been sent to your department.${provisional ? " <strong>This is provisional and may be updated.</strong>" : ""}</p><p><a href="${url}">View the function sheet</a></p>`,
   });
 
   await logAudit({ actorId, action: "SEND_FUNCTION_SHEET", entityType: "Event", entityId: eventId, eventId });
@@ -413,4 +442,19 @@ export async function notifyFunctionSheetUpdated(eventId: string, changeDesc: st
       emailedAt: null,
     })),
   });
+}
+
+export async function getRequirementTemplatesAction(
+  eventType: string,
+): Promise<{ ok: true; templates: Record<string, string> } | { ok: false; error: string }> {
+  if (!eventType) return { ok: true, templates: {} };
+  const records = await prisma.requirementTemplate.findMany({
+    where: { eventType },
+    select: { departmentName: true, items: true },
+  });
+  const templates: Record<string, string> = {};
+  for (const r of records) {
+    templates[r.departmentName] = r.items.join("\n");
+  }
+  return { ok: true, templates };
 }

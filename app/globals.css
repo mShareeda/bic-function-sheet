@@ -177,6 +177,26 @@
 }
 
 @layer utilities {
+  .vip-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .vip-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 35%,
+      hsl(var(--vip) / 0.14) 50%,
+      transparent 65%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.8s linear infinite;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }

@@ -14,7 +14,7 @@ export function Sidebar({ roles }: { roles: RoleName[] }) {
   const admin = NAV_ITEMS.filter((i) => i.group === "admin" && i.show(roles));
 
   return (
-    <aside className="hidden lg:flex sticky top-0 h-dvh w-64 shrink-0 flex-col gap-2 border-r border-border/40 bg-surface/30 backdrop-blur-glass px-4 py-5">
+    <aside className="hidden lg:flex sticky top-0 h-dvh w-64 shrink-0 flex-col gap-2 border-r border-border/50 glass px-4 py-5">
       <Link
         href="/dashboard"
         className="focus-ring flex items-center gap-2.5 rounded-md px-2 py-2 mb-2"
@@ -59,16 +59,21 @@ function NavGroup({
             key={item.href}
             href={item.href}
             className={cn(
-              "focus-ring group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-200",
+              "focus-ring group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all duration-300 ease-out",
               active
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-surface/70 hover:text-foreground",
+                ? "glass-subtle text-primary hover:translate-x-0.5"
+                : "text-muted-foreground hover:bg-surface/60 hover:text-foreground hover:translate-x-0.5",
             )}
           >
             {active && (
-              <span className="absolute left-0 top-2 h-[calc(100%-1rem)] w-[3px] rounded-r-full bg-primary" />
+              <span className="absolute left-0 top-2 h-[calc(100%-1rem)] w-[3px] rounded-r-full bg-primary animate-fade-in" />
             )}
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon
+              className={cn(
+                "h-4 w-4 shrink-0 transition-transform duration-300",
+                active ? "scale-110" : "group-hover:scale-105",
+              )}
+            />
             <span>{item.label}</span>
           </Link>
         );

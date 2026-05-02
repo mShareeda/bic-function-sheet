@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const PUBLIC_PATHS = [
   "/signin",
@@ -25,6 +26,29 @@ const SESSION_COOKIE =
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Rate-limit the NextAuth credentials sign-in endpoint.
+  // 20 POST attempts per IP per 10 minutes keeps the UI responsive while
+  // blocking credential-stuffing bursts before they reach the auth handler.
+  if (
+    pathname === "/api/auth/callback/credentials" &&
+    req.method === "POST"
+  ) {
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+      req.headers.get("x-real-ip") ??
+      "unknown";
+    const result = checkRateLimit(`signin:${ip}`, 20, 10 * 60 * 1000);
+    if (!result.allowed) {
+      return new NextResponse("Too many login attempts. Try again later.", {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(result.retryAfterMs / 1000)),
+          "Content-Type": "text/plain",
+        },
+      });
+    }
+  }
 
   // Allow reset-password/[token] without session
   if (pathname.startsWith("/reset-password")) return NextResponse.next();

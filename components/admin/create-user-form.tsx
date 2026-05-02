@@ -16,10 +16,16 @@ export function CreateUserForm() {
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [pendingData, setPendingData] = useState<FormData | null>(null);
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
     setPendingData(new FormData(e.currentTarget));
     setConfirmOpen(true);
   }
@@ -33,6 +39,8 @@ export function CreateUserForm() {
         setConfirmOpen(false);
         setSuccess("User created successfully.");
         setPendingData(null);
+        setPassword("");
+        setConfirmPassword("");
         setTimeout(() => setSuccess(null), 4000);
       } else {
         setConfirmOpen(false);
@@ -56,7 +64,7 @@ export function CreateUserForm() {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Create user?"
-        description={`Create a new user account? A temporary password will be emailed to the address provided.`}
+        description="Create a new user account with the specified password?"
         confirmLabel="Create"
         onConfirm={onConfirm}
         pending={pending}
@@ -69,6 +77,31 @@ export function CreateUserForm() {
         <div className="space-y-2">
           <Label htmlFor="cu-email">Email</Label>
           <Input id="cu-email" name="email" type="email" required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cu-password">Password</Label>
+          <Input
+            id="cu-password"
+            name="password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Min. 10 chars, letters + digits"
+            autoComplete="new-password"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cu-confirm">Confirm password</Label>
+          <Input
+            id="cu-confirm"
+            name="confirmPassword"
+            type="password"
+            required
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+          />
         </div>
         <fieldset className="space-y-1">
           <legend className="text-sm font-medium">Roles</legend>
@@ -84,7 +117,7 @@ export function CreateUserForm() {
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex gap-2">
           <Button type="submit" size="sm" disabled={pending}>{pending ? "Creating…" : "Create"}</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setOpen(false); setError(null); setPassword(""); setConfirmPassword(""); }}>Cancel</Button>
         </div>
       </form>
     </>

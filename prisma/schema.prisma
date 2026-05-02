@@ -23,6 +23,7 @@ enum RoleName {
 enum EventStatus {
   DRAFT
   CONFIRMED
+  PROVISIONAL_FUNCTION_SHEET_SENT
   FUNCTION_SHEET_SENT
   IN_SETUP
   LIVE
@@ -81,6 +82,7 @@ model User {
   notifications          Notification[]
   auditEntries           AuditLog[]
   passwordResetTokens    PasswordResetToken[]
+  eventTemplates         EventTemplate[]        @relation("CreatedTemplates")
 
   @@index([email])
 }
@@ -354,4 +356,48 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([eventId])
   @@index([createdAt])
+}
+
+// =====================
+// Requirement Templates
+// Pre-canned requirement text per event type × department,
+// used by the wizard to pre-populate department requirement fields.
+// =====================
+
+model RequirementTemplate {
+  id             String   @id @default(cuid())
+  eventType      String
+  departmentName String
+  items          String[]
+
+  @@unique([eventType, departmentName])
+  @@index([eventType])
+}
+
+// =====================
+// Recurring Event Templates
+// Coordinators build reusable scaffolds (departments + requirements +
+// agenda stubs) so they don't re-enter everything for similar events.
+// departments and agendaItems are stored as JSON arrays.
+// =====================
+
+model EventTemplate {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?  @db.Text
+  eventType       String?
+  isVip           Boolean  @default(false)
+  estimatedGuests Int?
+  salespersonName String?
+  // [{ departmentId, departmentName, requirements: string }]
+  departments     Json     @default("[]")
+  // [{ sequence, startTime (HH:mm), endTime (HH:mm), description, venueText }]
+  agendaItems     Json     @default("[]")
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy User @relation("CreatedTemplates", fields: [createdById], references: [id])
+
+  @@index([createdById])
 }

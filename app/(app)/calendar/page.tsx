@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isAdmin, hasRole } from "@/lib/authz";
 import type { SessionUser } from "@/lib/authz";
-import { CalendarView } from "@/components/calendar/calendar-view";
+import { CalendarTabs } from "@/components/calendar/calendar-tabs";
 
 export default async function CalendarPage() {
   const session = await auth();
@@ -30,13 +30,23 @@ export default async function CalendarPage() {
   const events = await prisma.event.findMany({
     where,
     select: {
-      id: true, title: true, liveStart: true, liveEnd: true,
-      status: true, isVip: true,
+      id: true,
+      title: true,
+      status: true,
+      isVip: true,
+      // All three phases — used by both the FullCalendar and the Gantt view
+      setupStart: true,
+      setupEnd: true,
+      liveStart: true,
+      liveEnd: true,
+      breakdownStart: true,
+      breakdownEnd: true,
       coordinator: { select: { displayName: true } },
     },
     orderBy: { liveStart: "asc" },
   });
 
+  // ── FullCalendar event shape ─────────────────────────────────────────────
   const calEvents = events.map((ev) => ({
     id: ev.id,
     title: ev.title + (ev.isVip ? " ★" : ""),
@@ -44,10 +54,23 @@ export default async function CalendarPage() {
     end: ev.liveEnd.toISOString(),
     url: `/events/${ev.id}`,
     extendedProps: { status: ev.status, isVip: ev.isVip },
-    classNames: [
-      `status-${ev.status.toLowerCase()}`,
-      ev.isVip ? "vip-event" : "",
-    ],
+    classNames: [`status-${ev.status.toLowerCase()}`, ev.isVip ? "vip-event" : ""],
+  }));
+
+  // ── Timeline / Gantt event shape ─────────────────────────────────────────
+  const timelineEvents = events.map((ev) => ({
+    id: ev.id,
+    title: ev.title,
+    status: ev.status as string,
+    isVip: ev.isVip,
+    setupStart: ev.setupStart.toISOString(),
+    setupEnd: ev.setupEnd.toISOString(),
+    liveStart: ev.liveStart.toISOString(),
+    liveEnd: ev.liveEnd.toISOString(),
+    breakdownStart: ev.breakdownStart.toISOString(),
+    breakdownEnd: ev.breakdownEnd.toISOString(),
+    coordinator: ev.coordinator?.displayName ?? undefined,
+    url: `/events/${ev.id}`,
   }));
 
   return (
@@ -61,7 +84,8 @@ export default async function CalendarPage() {
           {events.length} event{events.length === 1 ? "" : "s"} visible to you
         </p>
       </div>
-      <CalendarView events={calEvents} />
+
+      <CalendarTabs calEvents={calEvents} timelineEvents={timelineEvents} />
     </div>
   );
 }

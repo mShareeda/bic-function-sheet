@@ -28,6 +28,14 @@ const STATUS_META: Record<EventStatus, StatusMeta> = {
     ring: "ring-status-confirmed/20",
     dot: "bg-status-confirmed",
   },
+  PROVISIONAL_FUNCTION_SHEET_SENT: {
+    label: "Provisional sent",
+    token: "sent",
+    bg: "bg-amber-500/10",
+    text: "text-amber-600 dark:text-amber-400",
+    ring: "ring-amber-500/20",
+    dot: "bg-amber-500",
+  },
   FUNCTION_SHEET_SENT: {
     label: "Sheet sent",
     token: "sent",
@@ -92,6 +100,7 @@ export function StatusBadge({
     <span
       className={cn(
         "inline-flex items-center rounded-full font-medium ring-1 ring-inset whitespace-nowrap",
+        "animate-flip-in",
         meta.bg,
         meta.text,
         meta.ring,
@@ -121,6 +130,7 @@ export function getStatusMeta(status: EventStatus) {
 export const ALL_STATUSES: EventStatus[] = [
   "DRAFT",
   "CONFIRMED",
+  "PROVISIONAL_FUNCTION_SHEET_SENT",
   "FUNCTION_SHEET_SENT",
   "IN_SETUP",
   "LIVE",

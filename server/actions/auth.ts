@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { signIn, signOut, auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -12,6 +13,7 @@ import {
   verifyPassword,
 } from "@/lib/password";
 import { getMailer } from "@/lib/mailer";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -87,6 +89,16 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
 const forgotSchema = z.object({ email: z.string().email() });
 
 export async function forgotPasswordAction(formData: FormData): Promise<ActionResult> {
+  // Rate-limit password reset requests: 5 per IP per hour.
+  // Always return ok to avoid leaking which emails exist — including on rate-limit.
+  const hdrs = await headers();
+  const ip =
+    hdrs.get("x-forwarded-for")?.split(",")[0].trim() ??
+    hdrs.get("x-real-ip") ??
+    "unknown";
+  const rl = checkRateLimit(`forgot:${ip}`, 5, 60 * 60 * 1000);
+  if (!rl.allowed) return { ok: true };
+
   const parsed = forgotSchema.safeParse({
     email: String(formData.get("email") ?? "").toLowerCase(),
   });

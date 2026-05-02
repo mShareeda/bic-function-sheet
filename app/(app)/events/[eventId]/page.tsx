@@ -5,10 +5,12 @@ import { prisma } from "@/lib/db";
 import {
   canEditEvent,
   canViewFullFunctionSheet,
+  canViewClientDetails,
   isAdmin,
   hasRole,
 } from "@/lib/authz";
 import type { SessionUser } from "@/lib/authz";
+import { getDeptColor } from "@/lib/dept-colors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,19 +85,16 @@ export default async function EventPage({
     managedDeptIds,
     eventDeptIds,
   );
-
-  const assignedReqIds = new Set<string>();
-  if (!canFullView && hasRole(u, "DEPT_TEAM_MEMBER")) {
-    const assignments = await prisma.requirementAssignment.findMany({
-      where: { userId: u.id, requirement: { eventId } },
-      select: { requirementId: true },
-    });
-    assignments.forEach((a) => assignedReqIds.add(a.requirementId));
-  }
+  const showClientDetails = canViewClientDetails(u, event);
 
   const facts: [string, string | null | undefined][] = [
-    ["Client", event.clientName],
-    ["Client contact", event.clientContact],
+    // Client fields — coordinator / admin only
+    ...(showClientDetails
+      ? ([
+          ["Client", event.clientName],
+          ["Client contact", event.clientContact],
+        ] as [string, string | null | undefined][])
+      : []),
     ["Coordinator", event.coordinator?.displayName],
     ["Salesperson", event.salespersonName],
     ["Maximizer #", event.maximizerNumber],
@@ -109,8 +108,8 @@ export default async function EventPage({
   ];
   const visibleFacts = facts.filter(([, v]) => v);
 
-  const showRequirements =
-    (canFullView || assignedReqIds.size > 0) && event.departments.length > 0;
+  // All authenticated users see the departments tab
+  const showRequirements = event.departments.length > 0;
 
   return (
     <div className="space-y-6">
@@ -128,7 +127,9 @@ export default async function EventPage({
         <div className="mx-auto flex max-w-7xl flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Function sheet
+              {event.status === "PROVISIONAL_FUNCTION_SHEET_SENT"
+                ? "Provisional function sheet"
+                : "Function sheet"}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-3">
               <h1 className="text-h1 truncate">{event.title}</h1>
@@ -344,41 +345,48 @@ export default async function EventPage({
         {showRequirements && (
           <TabsContent value="departments" className="space-y-4">
             {event.departments.map((ed) => {
-              const reqs = canFullView
-                ? ed.requirements
-                : ed.requirements.filter((r) => assignedReqIds.has(r.id));
-              if (!canFullView && reqs.length === 0) return null;
+              const deptColor = getDeptColor(ed.department.name);
+              const canEditThisDept = canEdit || managedDeptIds.includes(ed.departmentId);
 
               return (
-                <Card key={ed.id}>
-                  <CardHeader className="pb-2">
+                <Card key={ed.id} className="overflow-hidden">
+                  <CardHeader
+                    className="pb-2"
+                    style={{ backgroundColor: deptColor.bg, color: deptColor.text }}
+                  >
                     <div className="flex items-center justify-between gap-3">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <CardTitle className="text-base flex items-center gap-2" style={{ color: deptColor.text }}>
+                        <Building2 className="h-4 w-4" style={{ color: deptColor.text, opacity: 0.7 }} />
                         {ed.department.name}
                       </CardTitle>
-                      {(canEdit || managedDeptIds.includes(ed.departmentId)) && (
-                        <Button asChild size="sm" variant="ghost">
-                          <Link
-                            href={`/events/${eventId}/requirements/${ed.departmentId}`}
-                          >
+                      {canEditThisDept && (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="ghost"
+                          style={{ color: deptColor.text, opacity: 0.85 }}
+                          className="hover:opacity-100"
+                        >
+                          <Link href={`/events/${eventId}/requirements/${ed.departmentId}`}>
                             Edit
                           </Link>
                         </Button>
                       )}
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    {reqs.length === 0 ? (
+                  <CardContent className="space-y-3 pt-3">
+                    {ed.requirements.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No requirements yet.
                       </p>
                     ) : (
-                      reqs.map((req) => {
+                      ed.requirements.map((req) => {
+                        // Manager notes visible to: admin, coordinator, dept managers, and note author
                         const visibleNotes = req.managerNotes.filter(
                           (n) =>
                             isAdmin(u) ||
                             event.coordinatorId === u.id ||
+                            hasRole(u, "DEPT_MANAGER") ||
                             n.author.id === u.id,
                         );
                         const priorityClass =

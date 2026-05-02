@@ -100,6 +100,20 @@ const config: Config = {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "flip-in": {
+          from: {
+            transform: "perspective(600px) rotateX(-60deg)",
+            opacity: "0",
+          },
+          to: {
+            transform: "perspective(600px) rotateX(0deg)",
+            opacity: "1",
+          },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-3px)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 200ms ease-out",
@@ -107,6 +121,8 @@ const config: Config = {
         "slide-in-right": "slide-in-right 240ms ease-out",
         "slide-in-left": "slide-in-left 240ms ease-out",
         shimmer: "shimmer 1.6s linear infinite",
+        "flip-in": "flip-in 350ms cubic-bezier(0.25, 1, 0.5, 1) both",
+        float: "float 4s ease-in-out infinite",
       },
       transitionTimingFunction: {
         "out-quart": "cubic-bezier(0.25, 1, 0.5, 1)",

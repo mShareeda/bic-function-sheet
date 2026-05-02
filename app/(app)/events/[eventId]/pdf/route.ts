@@ -29,11 +29,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ eventId
 
   const pdfBuffer = await renderFunctionSheetPdf(eventId);
   const safeTitle = event.title.replace(/[^a-zA-Z0-9 _-]/g, "").trim();
+  const docLabel =
+    event.status === "PROVISIONAL_FUNCTION_SHEET_SENT"
+      ? "Provisional Function Sheet"
+      : "Function Sheet";
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${safeTitle} - Function Sheet.pdf"`,
+      "Content-Disposition": `attachment; filename="${safeTitle} - ${docLabel}.pdf"`,
       "Cache-Control": "no-store",
     },
   });

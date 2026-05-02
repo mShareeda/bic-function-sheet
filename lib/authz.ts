@@ -96,6 +96,11 @@ export function canAuthorManagerNote(
   );
 }
 
+/** Client name + contact — coordinator-only sensitive info */
+export function canViewClientDetails(u: SessionUser, ev: EventLike) {
+  return isAdmin(u) || isAssignedCoordinator(u, ev);
+}
+
 /** Full function-sheet read access (excludes per-team-member partial view) */
 export function canViewFullFunctionSheet(
   u: SessionUser,

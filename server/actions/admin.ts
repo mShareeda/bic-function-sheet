@@ -3,10 +3,10 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/authz";
-import { generateTempPassword, hashPassword } from "@/lib/password";
-import { getMailer } from "@/lib/mailer";
+import { hashPassword, validatePasswordPolicy } from "@/lib/password";
 import { logAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { RoleName } from "@prisma/client";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -14,6 +14,7 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 const createUserSchema = z.object({
   email: z.string().email(),
   displayName: z.string().min(2),
+  password: z.string().min(1, "Password is required."),
   roles: z.array(z.enum(["ADMIN", "COORDINATOR", "DEPT_MANAGER", "DEPT_TEAM_MEMBER"])),
 });
 
@@ -22,39 +23,94 @@ export async function createUserAction(formData: FormData): Promise<ActionResult
   const parsed = createUserSchema.safeParse({
     email: String(formData.get("email") ?? "").toLowerCase(),
     displayName: String(formData.get("displayName") ?? ""),
+    password: String(formData.get("password") ?? ""),
     roles: formData.getAll("roles"),
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
 
-  const { email, displayName, roles } = parsed.data;
+  const { email, displayName, password, roles } = parsed.data;
+
+  const policyError = validatePasswordPolicy(password);
+  if (policyError) return { ok: false, error: policyError };
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) return { ok: false, error: "A user with that email already exists." };
 
-  const tempPassword = generateTempPassword();
-  const passwordHash = await hashPassword(tempPassword);
+  const passwordHash = await hashPassword(password);
 
   const user = await prisma.user.create({
     data: {
       email,
       displayName,
       passwordHash,
-      mustChangePassword: true,
+      mustChangePassword: false,
       roles: { create: roles.map((r) => ({ role: r as RoleName })) },
     },
   });
 
   await logAudit({ actorId: actor.id, action: "CREATE", entityType: "User", entityId: user.id, message: `Created user ${email}` });
 
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
-  await getMailer().send({
-    to: email,
-    subject: "Your BIC Function Sheet account",
-    text: `Hi ${displayName},\n\nYour account has been created.\nEmail: ${email}\nTemporary password: ${tempPassword}\n\nSign in at ${appUrl}/signin — you'll be asked to change your password on first login.`,
-    html: `<p>Hi ${displayName},</p><p>Your account has been created.<br>Email: ${email}<br>Temporary password: <strong>${tempPassword}</strong></p><p><a href="${appUrl}/signin">Sign in here</a> — you'll be asked to change your password on first login.</p>`,
-  });
-
   revalidatePath("/admin/users");
   return { ok: true };
+}
+
+export async function setUserPasswordAction(userId: string, password: string): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const policyError = validatePasswordPolicy(password);
+  if (policyError) return { ok: false, error: policyError };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { ok: false, error: "User not found." };
+
+  const passwordHash = await hashPassword(password);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash, mustChangePassword: false, failedLoginAttempts: 0, lockedUntil: null },
+  });
+
+  await logAudit({ actorId: actor.id, action: "UPDATE", entityType: "User", entityId: userId, message: `Password reset by admin` });
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}
+
+export async function deleteUserAction(userId: string): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+  if (actor.id === userId) return { ok: false, error: "You cannot delete your own account." };
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { ok: false, error: "User not found." };
+
+  // Block if user has created events (createdById is non-nullable)
+  const createdEventCount = await prisma.event.count({ where: { createdById: userId } });
+  if (createdEventCount > 0) {
+    return { ok: false, error: `Cannot delete: this user created ${createdEventCount} event(s). Deactivate instead.` };
+  }
+
+  // Block if user has uploaded attachments (uploadedById is non-nullable)
+  const attachmentCount = await prisma.attachment.count({ where: { uploadedById: userId } });
+  if (attachmentCount > 0) {
+    return { ok: false, error: `Cannot delete: this user uploaded ${attachmentCount} file(s). Deactivate instead.` };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Null actorId on audit logs (nullable field)
+    await tx.auditLog.updateMany({ where: { actorId: userId }, data: { actorId: null } });
+    // Null coordinatorId on events (nullable field)
+    await tx.event.updateMany({ where: { coordinatorId: userId }, data: { coordinatorId: null } });
+    // Delete requirement assignments (both as assignee and assigner)
+    await tx.requirementAssignment.deleteMany({ where: { OR: [{ userId }, { assignedById: userId }] } });
+    // Delete requirement notes authored by user
+    await tx.requirementNote.deleteMany({ where: { authorId: userId } });
+    // Delete event templates created by user
+    await tx.eventTemplate.deleteMany({ where: { createdById: userId } });
+    // Delete the user (cascades: UserRole, DepartmentMember, Notification, PasswordResetToken)
+    await tx.user.delete({ where: { id: userId } });
+  });
+
+  await logAudit({ actorId: actor.id, action: "DELETE", entityType: "User", entityId: userId, message: `Deleted user ${user.email}` });
+  revalidatePath("/admin/users");
+  redirect("/admin/users");
 }
 
 export async function updateUserRolesAction(

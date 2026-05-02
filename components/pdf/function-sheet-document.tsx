@@ -4,8 +4,10 @@ import {
   Text,
   View,
   StyleSheet,
+  Image,
 } from "@react-pdf/renderer";
 import { format } from "date-fns";
+import { getDeptColor } from "@/lib/dept-colors";
 
 const COLORS = {
   ink: "#0F172A",
@@ -273,6 +275,162 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
 
+  // Cover page
+  coverPage: {
+    fontFamily: "Helvetica",
+    padding: 0,
+    backgroundColor: "#fff",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coverTop: {
+    width: "100%",
+    backgroundColor: COLORS.primary,
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  coverTopVip: {
+    width: "100%",
+    backgroundColor: COLORS.vipDark,
+    paddingVertical: 32,
+    alignItems: "center",
+  },
+  coverLogo: { width: 100, height: 100, objectFit: "contain" },
+  coverLogoPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coverBrand: {
+    fontSize: 10,
+    color: "rgba(255,255,255,0.8)",
+    letterSpacing: 2,
+    marginTop: 14,
+    fontFamily: "Helvetica-Bold",
+  },
+  coverDocType: {
+    fontSize: 20,
+    color: "#fff",
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 3,
+    marginTop: 4,
+  },
+  coverBody: {
+    flex: 1,
+    width: "100%",
+    paddingHorizontal: 48,
+    paddingVertical: 36,
+    alignItems: "center",
+  },
+  coverVipRibbon: {
+    width: "100%",
+    backgroundColor: COLORS.vip,
+    paddingVertical: 8,
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  coverVipText: {
+    fontSize: 10,
+    color: "#fff",
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 2,
+  },
+  coverEventTitle: {
+    fontSize: 26,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.ink,
+    textAlign: "center",
+    lineHeight: 1.3,
+    marginBottom: 8,
+  },
+  coverClient: {
+    fontSize: 13,
+    color: COLORS.muted,
+    textAlign: "center",
+    marginBottom: 32,
+  },
+  coverDivider: {
+    width: 48,
+    height: 3,
+    backgroundColor: COLORS.primary,
+    marginBottom: 28,
+    borderRadius: 2,
+  },
+  coverDividerVip: {
+    width: 48,
+    height: 3,
+    backgroundColor: COLORS.vipBorder,
+    marginBottom: 28,
+    borderRadius: 2,
+  },
+  coverGrid: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 0,
+    borderWidth: 1,
+    borderColor: COLORS.rule,
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: 28,
+  },
+  coverCell: {
+    width: "50%",
+    padding: 14,
+    borderRightWidth: 1,
+    borderRightColor: COLORS.rule,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.rule,
+  },
+  coverCellLabel: {
+    fontSize: 7,
+    color: COLORS.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 3,
+  },
+  coverCellValue: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.ink,
+    lineHeight: 1.3,
+  },
+  coverCellSub: {
+    fontSize: 8,
+    color: COLORS.muted,
+    marginTop: 1,
+  },
+  coverCoordinator: {
+    fontSize: 10,
+    color: COLORS.body,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  coverFooter: {
+    width: "100%",
+    borderTopWidth: 0.5,
+    borderTopColor: COLORS.rule,
+    paddingTop: 12,
+    paddingHorizontal: 48,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: "auto",
+    paddingBottom: 24,
+  },
+  coverFooterText: { fontSize: 7.5, color: COLORS.faint },
+  coverConfidential: {
+    fontSize: 7.5,
+    color: COLORS.primary,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 0.5,
+  },
+
   // Footer
   footer: {
     position: "absolute",
@@ -293,6 +451,7 @@ const styles = StyleSheet.create({
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft",
   CONFIRMED: "Confirmed",
+  PROVISIONAL_FUNCTION_SHEET_SENT: "Provisional",
   FUNCTION_SHEET_SENT: "Sheet sent",
   IN_SETUP: "In setup",
   LIVE: "Live",
@@ -360,18 +519,145 @@ function KV({
   );
 }
 
-export function FunctionSheetDocument({ event }: { event: EventData }) {
+export function FunctionSheetDocument({
+  event,
+  logoSrc = "",
+  isProvisional = false,
+}: {
+  event: EventData;
+  logoSrc?: string;
+  isProvisional?: boolean;
+}) {
   const generated = format(new Date(), "d MMM yyyy HH:mm");
   const totalReqs = event.departments.reduce(
     (n, d) => n + d.requirements.length,
     0,
   );
+  const docTypeLabel = isProvisional ? "PROVISIONAL FUNCTION SHEET" : "FUNCTION SHEET";
 
   return (
     <Document
-      title={`${event.title} - Function Sheet`}
+      title={`${event.title} - ${isProvisional ? "Provisional " : ""}Function Sheet`}
       author="BIC Function Sheet"
     >
+      {/* ── Cover page ── */}
+      <Page size="A4" style={styles.coverPage}>
+        {/* Top band with logo */}
+        <View style={event.isVip ? styles.coverTopVip : styles.coverTop}>
+          {logoSrc ? (
+            <Image src={logoSrc} style={styles.coverLogo} />
+          ) : (
+            <View style={styles.coverLogoPlaceholder} />
+          )}
+          <Text style={styles.coverBrand}>BAHRAIN INTERNATIONAL CIRCUIT</Text>
+          <Text style={styles.coverDocType}>{docTypeLabel}</Text>
+        </View>
+
+        {/* VIP ribbon */}
+        {event.isVip && (
+          <View style={styles.coverVipRibbon}>
+            <Text style={styles.coverVipText}>
+              ★  VIP / DIGNITARY EVENT — ELEVATED PROTOCOL  ★
+            </Text>
+          </View>
+        )}
+
+        {/* Cover body */}
+        <View style={styles.coverBody}>
+          {/* Provisional warning */}
+          {isProvisional && (
+            <View
+              style={{
+                width: "100%",
+                backgroundColor: "#FEF3C7",
+                borderWidth: 1,
+                borderColor: "#F59E0B",
+                borderRadius: 4,
+                padding: 10,
+                marginBottom: 18,
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ fontSize: 9, fontFamily: "Helvetica-Bold", color: "#92400E", letterSpacing: 0.5, textTransform: "uppercase" }}>
+                ⚠ Provisional — subject to change
+              </Text>
+              <Text style={{ fontSize: 8, color: "#78350F", marginTop: 3, textAlign: "center" }}>
+                This is a preliminary function sheet. A confirmed version will follow.
+              </Text>
+            </View>
+          )}
+          <Text style={styles.coverEventTitle}>{event.title}</Text>
+
+          <View style={event.isVip ? styles.coverDividerVip : styles.coverDivider} />
+
+          {/* Key dates grid */}
+          <View style={styles.coverGrid}>
+            <View style={styles.coverCell}>
+              <Text style={styles.coverCellLabel}>Event Date</Text>
+              <Text style={styles.coverCellValue}>
+                {format(event.eventDate, "EEEE, d MMMM yyyy")}
+              </Text>
+              <Text style={styles.coverCellSub}>
+                {format(event.eventDate, "HH:mm")}
+              </Text>
+            </View>
+            <View style={[styles.coverCell, { borderRightWidth: 0 }]}>
+              <Text style={styles.coverCellLabel}>Setup Window</Text>
+              <Text style={styles.coverCellValue}>
+                {format(event.setupStart, "d MMM, HH:mm")} →{" "}
+                {format(event.setupEnd, "HH:mm")}
+              </Text>
+              <Text style={styles.coverCellSub}>
+                {format(event.setupEnd, "d MMM yyyy") !== format(event.setupStart, "d MMM yyyy")
+                  ? `ends ${format(event.setupEnd, "d MMM")}`
+                  : ""}
+              </Text>
+            </View>
+            <View style={[styles.coverCell, { borderBottomWidth: 0 }]}>
+              <Text style={styles.coverCellLabel}>Live Event</Text>
+              <Text style={styles.coverCellValue}>
+                {format(event.liveStart, "d MMM, HH:mm")} →{" "}
+                {format(event.liveEnd, "HH:mm")}
+              </Text>
+              <Text style={styles.coverCellSub}>
+                {format(event.liveEnd, "d MMM yyyy") !== format(event.liveStart, "d MMM yyyy")
+                  ? `ends ${format(event.liveEnd, "d MMM")}`
+                  : ""}
+              </Text>
+            </View>
+            <View style={[styles.coverCell, { borderRightWidth: 0, borderBottomWidth: 0 }]}>
+              <Text style={styles.coverCellLabel}>Breakdown Window</Text>
+              <Text style={styles.coverCellValue}>
+                {format(event.breakdownStart, "d MMM, HH:mm")} →{" "}
+                {format(event.breakdownEnd, "HH:mm")}
+              </Text>
+              <Text style={styles.coverCellSub}>
+                {format(event.breakdownEnd, "d MMM yyyy") !== format(event.breakdownStart, "d MMM yyyy")
+                  ? `ends ${format(event.breakdownEnd, "d MMM")}`
+                  : ""}
+              </Text>
+            </View>
+          </View>
+
+          {event.coordinator && (
+            <Text style={styles.coverCoordinator}>
+              Coordinator: {event.coordinator.displayName}
+            </Text>
+          )}
+          <Text style={[styles.coverCellLabel, { textAlign: "center", marginTop: 4 }]}>
+            {event.departments.length} dept · {totalReqs} req · Status:{" "}
+            {STATUS_LABEL[event.status] ?? event.status}
+          </Text>
+        </View>
+
+        {/* Cover footer */}
+        <View style={styles.coverFooter}>
+          <Text style={styles.coverFooterText}>Generated {generated}</Text>
+          <Text style={styles.coverConfidential}>CONFIDENTIAL</Text>
+        </View>
+      </Page>
+
+      {/* ── Main content page(s) ── */}
       <Page size="A4" style={styles.page}>
         {/* ── Header band (VIP gets a tinted band + thicker gold rule) ── */}
         <View
@@ -380,7 +666,9 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
         >
           <View>
             <Text style={styles.brandLine}>BAHRAIN INTERNATIONAL CIRCUIT</Text>
-            <Text style={styles.docTitle}>Function Sheet</Text>
+            <Text style={styles.docTitle}>
+              {isProvisional ? "Provisional Function Sheet" : "Function Sheet"}
+            </Text>
             <Text style={styles.eventTitle}>{event.title}</Text>
           </View>
           <View style={styles.headerRight}>
@@ -432,8 +720,6 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
                 : "—"
             }
           />
-          <KV label="Client Name" value={event.clientName ?? "—"} />
-          <KV label="Client Contact" value={event.clientContact ?? "—"} />
           <KV
             label="VIP / Dignitary"
             value={event.isVip ? "★ Yes — VIP" : "No"}
@@ -508,15 +794,17 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
               Department Requirements ({event.departments.length} dept ·{" "}
               {totalReqs} req)
             </Text>
-            {event.departments.map((ed) => (
+            {event.departments.map((ed) => {
+              const dColor = getDeptColor(ed.department.name);
+              return (
               <View
                 key={ed.department.name}
                 style={styles.deptBlock}
                 wrap={false}
               >
-                <View style={styles.deptHeader}>
-                  <Text style={styles.deptName}>{ed.department.name}</Text>
-                  <Text style={styles.deptCount}>
+                <View style={[styles.deptHeader, { backgroundColor: dColor.bg }]}>
+                  <Text style={[styles.deptName, { color: dColor.text }]}>{ed.department.name}</Text>
+                  <Text style={[styles.deptCount, { color: dColor.text, opacity: 0.75 }]}>
                     {ed.requirements.length}{" "}
                     {ed.requirements.length === 1
                       ? "requirement"
@@ -565,7 +853,8 @@ export function FunctionSheetDocument({ event }: { event: EventData }) {
                   ))
                 )}
               </View>
-            ))}
+              );
+            })}
           </>
         )}
 

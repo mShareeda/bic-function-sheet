@@ -8,6 +8,7 @@ import {
   Building2,
   MapPin,
   ScrollText,
+  Repeat2,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleName } from "@prisma/client";
@@ -43,6 +44,13 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Calendar",
     icon: CalendarDays,
     show: () => true,
+    group: "primary",
+  },
+  {
+    href: "/recurring",
+    label: "Templates",
+    icon: Repeat2,
+    show: (roles) => has(roles, "ADMIN", "COORDINATOR"),
     group: "primary",
   },
   {

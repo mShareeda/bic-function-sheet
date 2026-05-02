@@ -123,38 +123,47 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // M365 SSO JIT path — only reachable when AUTH_M365_ENABLED=true
       if (account?.provider === "microsoft-entra-id" && profile) {
         const oid = (profile as { oid?: string }).oid;
-        const email = (profile.email ?? (profile as { preferred_username?: string }).preferred_username)?.toLowerCase();
-        if (!email) return false;
+        const email = (
+          profile.email ??
+          (profile as { preferred_username?: string }).preferred_username
+        )?.toLowerCase();
 
-        const existing = await prisma.user.findFirst({
-          where: { OR: [{ azureOid: oid }, { email }] },
-        });
-        if (existing) {
-          if (!existing.azureOid && oid) {
-            await prisma.user.update({
-              where: { id: existing.id },
-              data: { azureOid: oid, lastLoginAt: new Date() },
-            });
-          } else {
-            await prisma.user.update({
-              where: { id: existing.id },
-              data: { lastLoginAt: new Date() },
-            });
-          }
-          (user as { id?: string }).id = existing.id;
-        } else {
-          // JIT-create with no roles; admin must assign roles.
-          const created = await prisma.user.create({
-            data: {
-              email,
-              displayName: profile.name ?? email,
-              azureOid: oid,
-              isActive: true,
-              lastLoginAt: new Date(),
-            },
+        // Require both OID and email from the token — reject malformed profiles.
+        if (!oid || !email) return false;
+
+        // 1. Look up by OID first (the authoritative Azure identity identifier).
+        const byOid = await prisma.user.findUnique({ where: { azureOid: oid } });
+        if (byOid) {
+          await prisma.user.update({
+            where: { id: byOid.id },
+            data: { lastLoginAt: new Date() },
           });
-          (user as { id?: string }).id = created.id;
+          (user as { id?: string }).id = byOid.id;
+          return true;
         }
+
+        // 2. No OID match — check for an existing account with the same email.
+        // If one exists WITHOUT an azureOid, reject the login to prevent an
+        // attacker from hijacking a credentials-based account by registering a
+        // Microsoft account with the same email address.
+        // The admin can explicitly link SSO by setting azureOid on the user record.
+        const byEmail = await prisma.user.findUnique({ where: { email } });
+        if (byEmail) {
+          // Existing credentials account — deny automatic SSO linkage.
+          return false;
+        }
+
+        // 3. Genuinely new user — JIT-create with no roles; admin must assign roles.
+        const created = await prisma.user.create({
+          data: {
+            email,
+            displayName: profile.name ?? email,
+            azureOid: oid,
+            isActive: true,
+            lastLoginAt: new Date(),
+          },
+        });
+        (user as { id?: string }).id = created.id;
       }
       return true;
     },

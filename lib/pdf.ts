@@ -1,7 +1,18 @@
 import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { prisma } from "@/lib/db";
 import { FunctionSheetDocument } from "@/components/pdf/function-sheet-document";
 import React, { type ReactElement } from "react";
+
+function loadLogoBase64(): string {
+  try {
+    const buf = readFileSync(join(process.cwd(), "public", "bic-logo.png"));
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    return "";
+  }
+}
 
 export async function renderFunctionSheetPdf(eventId: string): Promise<Buffer> {
   const event = await prisma.event.findUnique({
@@ -32,7 +43,9 @@ export async function renderFunctionSheetPdf(eventId: string): Promise<Buffer> {
 
   if (!event) throw new Error("Event not found");
 
-  const element = React.createElement(FunctionSheetDocument, { event }) as ReactElement<DocumentProps>;
+  const logoSrc = loadLogoBase64();
+  const isProvisional = event.status === "PROVISIONAL_FUNCTION_SHEET_SENT";
+  const element = React.createElement(FunctionSheetDocument, { event, logoSrc, isProvisional }) as ReactElement<DocumentProps>;
   const buffer = await renderToBuffer(element);
   return Buffer.from(buffer);
 }

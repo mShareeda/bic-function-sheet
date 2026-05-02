@@ -12,6 +12,8 @@ import {
   Trash2,
   Star,
   AlertCircle,
+  Sparkles,
+  WandSparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +21,63 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
-import { createEventCompleteAction } from "@/server/actions/events";
+import { createEventCompleteAction, getRequirementTemplatesAction } from "@/server/actions/events";
+
+const EVENT_TYPES = [
+  { value: "", label: "— select type —" },
+  { value: "race_day", label: "Race Day" },
+  { value: "corporate_hospitality", label: "Corporate Hospitality" },
+  { value: "track_day", label: "Track Day" },
+  { value: "exhibition", label: "Exhibition" },
+  { value: "conference", label: "Conference" },
+  { value: "concert_entertainment", label: "Concert / Entertainment" },
+  { value: "off_road_event", label: "Off-Road Event" },
+  { value: "drag_event", label: "Drag Event" },
+  { value: "private_event", label: "Private Event" },
+  { value: "other", label: "Other" },
+] as const;
+
+const DEPT_SUGGESTIONS: Record<string, string[]> = {
+  race_day: [
+    "Safety & Security", "ICT", "Marketing", "Media & Public Relations",
+    "Technical Operations", "Food and Beverage",
+    "Facility Management Cleaning & Logistics",
+    "Facility Management Electrical & Special Electronics", "Sporting",
+  ],
+  corporate_hospitality: [
+    "Food and Beverage", "Safety & Security", "ICT", "Marketing",
+    "Retail & Corporate Sales", "Facility Management Cleaning & Logistics", "Activities",
+  ],
+  track_day: [
+    "Safety & Security", "Technical Operations", "Engineering Workshop", "ICT",
+    "Facility Management Cleaning & Logistics",
+    "Facility Management AC/Mechanical & Landscaping",
+  ],
+  exhibition: [
+    "Marketing", "Media & Public Relations", "Retail & Corporate Sales", "ICT",
+    "Facility Management Cleaning & Logistics", "Safety & Security", "Activities",
+  ],
+  conference: [
+    "ICT", "Food and Beverage", "Safety & Security", "Marketing",
+    "Facility Management AC/Mechanical & Landscaping",
+    "Facility Management Cleaning & Logistics",
+  ],
+  concert_entertainment: [
+    "Safety & Security", "ICT", "Marketing", "Media & Public Relations",
+    "Facility Management Electrical & Special Electronics", "Food and Beverage", "Activities",
+  ],
+  off_road_event: [
+    "Off-Road", "Safety & Security", "Technical Operations",
+    "Facility Management Cleaning & Logistics", "ICT",
+  ],
+  drag_event: [
+    "Drag", "Safety & Security", "Technical Operations", "Engineering Workshop", "ICT",
+  ],
+  private_event: [
+    "Food and Beverage", "Safety & Security",
+    "Facility Management Cleaning & Logistics", "Activities",
+  ],
+};
 
 type Coordinator = { id: string; displayName: string };
 type Venue = { id: string; name: string };
@@ -41,6 +99,7 @@ type DeptDraft = {
 
 type WizardState = {
   // step 1
+  eventType: string;
   title: string;
   eventDate: string;
   eventDateTime: string;
@@ -115,6 +174,7 @@ export function EventWizard({
   const today = toLocalDate(new Date());
   const todayMidnight = `${today}T00:00`;
   const [state, setState] = React.useState<WizardState>(() => ({
+    eventType: "",
     title: "",
     eventDate: today,
     eventDateTime: todayMidnight,
@@ -282,6 +342,7 @@ export function EventWizard({
               state={state}
               set={set}
               departments={departments}
+              eventType={state.eventType}
             />
           )}
           {step === "review" && (
@@ -421,7 +482,14 @@ function DetailsStep({
         description="Core info about the booking. You can refine this later."
       />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Event name" required full error={errors.title}>
+        <Field label="Event type">
+          <SelectNative
+            value={state.eventType}
+            onChange={(v) => set("eventType", v)}
+            options={EVENT_TYPES as unknown as { value: string; label: string }[]}
+          />
+        </Field>
+        <Field label="Event name" required error={errors.title}>
           <Input
             value={state.title}
             onChange={(e) => set("title", e.target.value)}
@@ -737,24 +805,54 @@ function DepartmentsStep({
   state,
   set,
   departments,
+  eventType,
 }: {
   state: WizardState;
   set: <K extends keyof WizardState>(k: K, v: WizardState[K]) => void;
   departments: Department[];
+  eventType: string;
 }) {
-  function toggle(deptId: string) {
+  const suggestions = eventType ? (DEPT_SUGGESTIONS[eventType] ?? []) : [];
+  const [templates, setTemplates] = React.useState<Record<string, string>>({});
+
+  React.useEffect(() => {
+    if (!eventType) return;
+    getRequirementTemplatesAction(eventType).then((res) => {
+      if (res.ok) setTemplates(res.templates);
+    });
+  }, [eventType]);
+
+  function toggle(deptId: string, deptName: string) {
     const exists = state.departments.find((d) => d.departmentId === deptId);
     if (exists) {
-      set(
-        "departments",
-        state.departments.filter((d) => d.departmentId !== deptId),
-      );
+      set("departments", state.departments.filter((d) => d.departmentId !== deptId));
     } else {
+      // Pre-fill requirements from template if available
+      const template = templates[deptName] ?? "";
       set("departments", [
         ...state.departments,
-        { departmentId: deptId, requirements: "" },
+        { departmentId: deptId, requirements: template },
       ]);
     }
+  }
+
+  function applySuggestions() {
+    const currentIds = new Set(state.departments.map((d) => d.departmentId));
+    const toAdd = departments
+      .filter((d) => suggestions.includes(d.name) && !currentIds.has(d.id))
+      .map((d) => ({ departmentId: d.id, requirements: templates[d.name] ?? "" }));
+    if (toAdd.length > 0) set("departments", [...state.departments, ...toAdd]);
+  }
+
+  function applyTemplate(deptId: string, deptName: string) {
+    const text = templates[deptName];
+    if (!text) return;
+    set(
+      "departments",
+      state.departments.map((d) =>
+        d.departmentId === deptId ? { ...d, requirements: text } : d,
+      ),
+    );
   }
 
   function updateReq(deptId: string, value: string) {
@@ -766,12 +864,54 @@ function DepartmentsStep({
     );
   }
 
+  const suggestedCount = departments.filter((d) => suggestions.includes(d.name)).length;
+  const alreadyApplied = departments
+    .filter((d) => suggestions.includes(d.name))
+    .every((d) => state.departments.some((sd) => sd.departmentId === d.id));
+
   return (
     <div className="space-y-5">
       <StepHeader
         title="Departments"
         description="Pick which departments are involved, then describe what each one needs to deliver."
       />
+
+      {/* Smart suggestion banner */}
+      {suggestions.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-md border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="text-sm font-semibold">
+                Smart suggestions for{" "}
+                {EVENT_TYPES.find((t) => t.value === eventType)?.label ?? eventType}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {suggestedCount} departments are typically involved in this type of event.
+                {Object.keys(templates).length > 0 &&
+                  " Requirements will be pre-filled from templates."}
+              </p>
+            </div>
+          </div>
+          {!alreadyApplied && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={applySuggestions}
+              className="shrink-0 gap-1.5"
+            >
+              <WandSparkles className="h-3.5 w-3.5" />
+              Apply suggested
+            </Button>
+          )}
+          {alreadyApplied && (
+            <span className="flex items-center gap-1 text-xs text-status-live">
+              <Check className="h-3.5 w-3.5" /> Applied
+            </span>
+          )}
+        </div>
+      )}
 
       {departments.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -780,10 +920,11 @@ function DepartmentsStep({
       ) : (
         <div className="space-y-3">
           {departments.map((d) => {
-            const sel = state.departments.find(
-              (sd) => sd.departmentId === d.id,
-            );
+            const sel = state.departments.find((sd) => sd.departmentId === d.id);
             const selected = !!sel;
+            const isSuggested = suggestions.includes(d.name);
+            const hasTemplate = !!templates[d.name];
+            const hasContent = !!(sel?.requirements?.trim());
             return (
               <div
                 key={d.id}
@@ -791,6 +932,8 @@ function DepartmentsStep({
                   "rounded-md border transition-colors",
                   selected
                     ? "border-primary/50 bg-primary/5"
+                    : isSuggested
+                    ? "border-primary/20 bg-primary/[0.02]"
                     : "border-border/50 bg-surface/30",
                 )}
               >
@@ -798,25 +941,41 @@ function DepartmentsStep({
                   <input
                     type="checkbox"
                     checked={selected}
-                    onChange={() => toggle(d.id)}
+                    onChange={() => toggle(d.id, d.name)}
                     className="h-4 w-4 accent-primary"
                   />
-                  <span className="text-sm font-semibold">{d.name}</span>
+                  <span className="flex-1 text-sm font-semibold">{d.name}</span>
+                  {isSuggested && !selected && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-primary/70">
+                      <Sparkles className="h-3 w-3" /> Suggested
+                    </span>
+                  )}
                 </label>
                 {selected && (
                   <div className="border-t border-border/40 p-4 pt-3">
-                    <Label
-                      htmlFor={`req-${d.id}`}
-                      className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                    >
-                      Requirement / brief for {d.name}
-                    </Label>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <Label
+                        htmlFor={`req-${d.id}`}
+                        className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                      >
+                        Requirements / brief for {d.name}
+                      </Label>
+                      {hasTemplate && !hasContent && (
+                        <button
+                          type="button"
+                          onClick={() => applyTemplate(d.id, d.name)}
+                          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <WandSparkles className="h-3 w-3" /> Use template
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       id={`req-${d.id}`}
                       value={sel?.requirements ?? ""}
                       onChange={(e) => updateReq(d.id, e.target.value)}
                       rows={4}
-                      className="mt-1.5 w-full rounded-md border border-border/60 bg-surface/50 backdrop-blur-glass px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                      className="mt-0 w-full rounded-md border border-border/60 bg-surface/50 backdrop-blur-glass px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                     />
                   </div>
                 )}
