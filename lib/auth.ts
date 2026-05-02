@@ -4,7 +4,9 @@ import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
+import { authConfig } from "@/auth.config";
 import type { RoleName } from "@prisma/client";
+import type { JWT } from "@auth/core/jwt";
 
 const M365_ENABLED = process.env.AUTH_M365_ENABLED === "true";
 
@@ -29,14 +31,13 @@ declare module "next-auth" {
   }
 }
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    uid: string;
-    roles: RoleName[];
-    mustChangePassword: boolean;
-    displayName: string;
-  }
-}
+// Internal token shape (not a module augmentation — avoids TS2664 with bundler resolution)
+type BicJWT = JWT & {
+  uid?: string;
+  displayName?: string;
+  roles?: RoleName[];
+  mustChangePassword?: boolean;
+};
 
 const providers = [
   Credentials({
@@ -63,7 +64,6 @@ const providers = [
 
       const ok = await verifyPassword(user.passwordHash, password);
       if (!ok) {
-        // Increment failed attempts; lock if threshold crossed within window
         const now = new Date();
         const sinceLast =
           user.lastLoginAt && now.getTime() - user.lastLoginAt.getTime() < LOCKOUT_WINDOW_MS
@@ -115,10 +115,10 @@ if (M365_ENABLED) {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  ...authConfig,
   providers,
-  session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60, updateAge: 12 * 60 * 60 },
-  pages: { signIn: "/signin", error: "/auth-error" },
   callbacks: {
+    ...authConfig.callbacks,
     async signIn({ user, account, profile }) {
       // M365 SSO JIT path — only reachable when AUTH_M365_ENABLED=true
       if (account?.provider === "microsoft-entra-id" && profile) {
@@ -128,10 +128,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           (profile as { preferred_username?: string }).preferred_username
         )?.toLowerCase();
 
-        // Require both OID and email from the token — reject malformed profiles.
         if (!oid || !email) return false;
 
-        // 1. Look up by OID first (the authoritative Azure identity identifier).
         const byOid = await prisma.user.findUnique({ where: { azureOid: oid } });
         if (byOid) {
           await prisma.user.update({
@@ -142,18 +140,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return true;
         }
 
-        // 2. No OID match — check for an existing account with the same email.
-        // If one exists WITHOUT an azureOid, reject the login to prevent an
-        // attacker from hijacking a credentials-based account by registering a
-        // Microsoft account with the same email address.
-        // The admin can explicitly link SSO by setting azureOid on the user record.
         const byEmail = await prisma.user.findUnique({ where: { email } });
-        if (byEmail) {
-          // Existing credentials account — deny automatic SSO linkage.
-          return false;
-        }
+        if (byEmail) return false;
 
-        // 3. Genuinely new user — JIT-create with no roles; admin must assign roles.
         const created = await prisma.user.create({
           data: {
             email,
@@ -168,6 +157,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return true;
     },
     async jwt({ token, user, trigger }) {
+      const t = token as BicJWT;
+      // Sign-in: copy user fields into JWT
       if (user) {
         const u = user as unknown as {
           id: string;
@@ -176,33 +167,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           roles?: RoleName[];
           mustChangePassword?: boolean;
         };
-        token.uid = u.id;
-        token.displayName = u.displayName ?? u.name ?? "";
-        token.roles = u.roles ?? [];
-        token.mustChangePassword = u.mustChangePassword ?? false;
+        t.uid = u.id;
+        t.displayName = u.displayName ?? u.name ?? "";
+        t.roles = u.roles ?? [];
+        t.mustChangePassword = u.mustChangePassword ?? false;
       }
-      // Refresh roles on session update
-      if (trigger === "update" && token.uid) {
+      // Refresh roles from DB when session is explicitly updated
+      if (trigger === "update" && t.uid) {
         const fresh = await prisma.user.findUnique({
-          where: { id: token.uid as string },
+          where: { id: t.uid },
           include: { roles: true },
         });
         if (fresh) {
-          token.roles = fresh.roles.map((r) => r.role);
-          token.mustChangePassword = fresh.mustChangePassword;
-          token.displayName = fresh.displayName;
+          t.roles = fresh.roles.map((r) => r.role);
+          t.mustChangePassword = fresh.mustChangePassword;
+          t.displayName = fresh.displayName;
         }
       }
-      return token;
+      return t as JWT;
     },
     async session({ session, token }) {
+      const t = token as BicJWT;
       session.user = {
         ...session.user,
-        id: token.uid,
+        id: t.uid ?? "",
         email: session.user?.email ?? "",
-        displayName: token.displayName,
-        roles: token.roles ?? [],
-        mustChangePassword: token.mustChangePassword ?? false,
+        displayName: t.displayName ?? "",
+        roles: (t.roles ?? []) as RoleName[],
+        mustChangePassword: t.mustChangePassword ?? false,
       };
       return session;
     },
