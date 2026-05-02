@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/authz";
 import { hashPassword, validatePasswordPolicy } from "@/lib/password";
 import { logAudit } from "@/lib/audit";
+import { notify } from "@/lib/notifications";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { RoleName } from "@prisma/client";
@@ -166,6 +167,38 @@ export async function toggleUserActiveAction(userId: string): Promise<ActionResu
   await logAudit({ actorId: actor.id, action: "UPDATE", entityType: "User", entityId: userId, message: `isActive set to ${!user.isActive}` });
   revalidatePath("/admin/users");
   return { ok: true };
+}
+
+export async function approveSsoUserAction(userId: string): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { ok: false, error: "User not found." };
+  if (!user.ssoProvisionedAt) return { ok: false, error: "User was not provisioned via SSO." };
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isActive: true, ssoProvisionedAt: null, lastLoginAt: new Date() },
+  });
+
+  await logAudit({ actorId: actor.id, action: "UPDATE", entityType: "User", entityId: userId, message: `SSO user approved` });
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  return { ok: true };
+}
+
+export async function rejectSsoUserAction(userId: string): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { ok: false, error: "User not found." };
+  if (!user.ssoProvisionedAt) return { ok: false, error: "User was not provisioned via SSO." };
+  if (actor.id === userId) return { ok: false, error: "Cannot reject your own account." };
+
+  // Delete the provisional user entirely — they never had access
+  await prisma.user.delete({ where: { id: userId } });
+
+  await logAudit({ actorId: actor.id, action: "DELETE", entityType: "User", entityId: userId, message: `SSO user rejected and removed: ${user.email}` });
+  revalidatePath("/admin/users");
+  redirect("/admin/users");
 }
 
 const deptSchema = z.object({

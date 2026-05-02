@@ -39,6 +39,7 @@ enum NotificationType {
   REQUIREMENT_UPDATED
   MANAGER_NOTE_ADDED
   STATUS_CHANGED
+  SSO_PENDING_APPROVAL
 }
 
 enum AuditAction {
@@ -63,6 +64,7 @@ model User {
   displayName         String
   passwordHash        String?  // null if SSO-only later
   azureOid            String?  @unique // populated only after M365 SSO is enabled
+  ssoProvisionedAt    DateTime? // set when JIT-created via M365 SSO; cleared on approval
   isActive            Boolean  @default(true)
   mustChangePassword  Boolean  @default(false)
   failedLoginAttempts Int      @default(0)

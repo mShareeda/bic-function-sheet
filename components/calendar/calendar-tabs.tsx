@@ -11,13 +11,16 @@ import { CalendarView } from "./calendar-view";
 import { TimelineView, type TimelineEvent } from "./timeline-view";
 
 type Tab = "calendar" | "timeline";
+type Coordinator = { id: string; displayName: string };
 
 interface CalendarTabsProps {
   calEvents: EventInput[];
   timelineEvents: TimelineEvent[];
+  canCreate?: boolean;
+  coordinators?: Coordinator[];
 }
 
-export function CalendarTabs({ calEvents, timelineEvents }: CalendarTabsProps) {
+export function CalendarTabs({ calEvents, timelineEvents, canCreate = false, coordinators = [] }: CalendarTabsProps) {
   const [tab, setTab] = useState<Tab>("calendar");
 
   return (
@@ -61,7 +64,7 @@ export function CalendarTabs({ calEvents, timelineEvents }: CalendarTabsProps) {
 
       {/* Views */}
       {tab === "calendar" ? (
-        <CalendarView events={calEvents} />
+        <CalendarView events={calEvents} canCreate={canCreate} coordinators={coordinators} />
       ) : (
         <TimelineView events={timelineEvents} />
       )}

@@ -1,15 +1,16 @@
 import argon2 from "argon2";
 import { randomBytes, createHash } from "node:crypto";
 
-export const PASSWORD_MIN_LENGTH = 10;
+export const PASSWORD_MIN_LENGTH = 12;
 
 export function validatePasswordPolicy(pw: string): string | null {
   if (pw.length < PASSWORD_MIN_LENGTH) {
     return `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
   }
-  if (!/[A-Za-z]/.test(pw) || !/[0-9]/.test(pw)) {
-    return "Password must contain letters and digits.";
-  }
+  if (!/[a-z]/.test(pw)) return "Password must contain at least one lowercase letter.";
+  if (!/[A-Z]/.test(pw)) return "Password must contain at least one uppercase letter.";
+  if (!/[0-9]/.test(pw)) return "Password must contain at least one digit.";
+  if (!/[^A-Za-z0-9]/.test(pw)) return "Password must contain at least one special character.";
   return null;
 }
 

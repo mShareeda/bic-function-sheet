@@ -106,7 +106,7 @@ export async function forgotPasswordAction(formData: FormData): Promise<ActionRe
     hdrs.get("x-forwarded-for")?.split(",")[0].trim() ??
     hdrs.get("x-real-ip") ??
     "unknown";
-  const rl = checkRateLimit(`forgot:${ip}`, 5, 60 * 60 * 1000);
+  const rl = await checkRateLimit(`forgot:${ip}`, 5, 60 * 60 * 1000);
   if (!rl.allowed) return { ok: true };
 
   const parsed = forgotSchema.safeParse({

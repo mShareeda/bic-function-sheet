@@ -275,3 +275,26 @@ export async function addManagerNoteAction(requirementId: string, eventId: strin
   revalidatePath(`/events/${eventId}`);
   return { ok: true };
 }
+
+export async function reorderRequirementsAction(
+  eventId: string,
+  departmentId: string,
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const actor = await requireSession();
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return { ok: false, error: "Not found." };
+  const memberOf = await prisma.departmentMember.findMany({ where: { userId: actor.id, isManager: true }, select: { departmentId: true } });
+  const managedDeptIds = memberOf.map((m) => m.departmentId);
+  if (!canEditDeptRequirements(actor, event, managedDeptIds, departmentId))
+    return { ok: false, error: "Not allowed." };
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.departmentRequirement.update({ where: { id }, data: { sortOrder: index } }),
+    ),
+  );
+
+  revalidatePath(`/events/${eventId}`);
+  return { ok: true };
+}

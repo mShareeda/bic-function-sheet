@@ -38,10 +38,24 @@ export function EventForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  function validateTimeWindows(fd: FormData): string | null {
+    const fields = ["setupStart", "setupEnd", "liveStart", "liveEnd", "breakdownStart", "breakdownEnd"] as const;
+    const [ss, se, ls, le, bs, be] = fields.map((f) => new Date(fd.get(f) as string).getTime());
+    if (isNaN(ss) || isNaN(se) || isNaN(ls) || isNaN(le) || isNaN(bs) || isNaN(be)) return null;
+    if (ss >= se) return "Setup start must be before setup end.";
+    if (se > ls) return "Setup end must not be after live start.";
+    if (ls >= le) return "Live start must be before live end.";
+    if (le > bs) return "Live end must not be after breakdown start.";
+    if (bs >= be) return "Breakdown start must be before breakdown end.";
+    return null;
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
+    const timeError = validateTimeWindows(fd);
+    if (timeError) { setError(timeError); return; }
     startTransition(async () => {
       const r = existing
         ? await updateEventAction(existing.id, fd)

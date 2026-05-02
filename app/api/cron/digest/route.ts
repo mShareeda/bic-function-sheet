@@ -5,13 +5,13 @@ import { getMailer } from "@/lib/mailer";
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  // Verify Vercel cron secret (set CRON_SECRET in Vercel env vars)
+  // Require CRON_SECRET — missing secret means misconfigured, deny all.
+  // Also accept the header Vercel injects automatically for cron invocations.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const isVercelCron = req.headers.get("x-vercel-cron-request") === "1";
+  const auth = req.headers.get("authorization");
+  if (!isVercelCron && (!secret || auth !== `Bearer ${secret}`)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";

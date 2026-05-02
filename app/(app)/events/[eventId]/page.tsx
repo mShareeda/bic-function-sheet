@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { StatusChanger } from "@/components/events/status-changer";
 import { AttachmentPanel } from "@/components/events/attachment-panel";
+import { DuplicateEventButton } from "@/components/events/duplicate-event-button";
 
 export default async function EventPage({
   params,
@@ -149,6 +150,13 @@ export default async function EventPage({
                   Edit
                 </Link>
               </Button>
+            )}
+            {canEdit && (
+              <DuplicateEventButton
+                eventId={eventId}
+                eventTitle={event.title}
+                eventDate={event.eventDate}
+              />
             )}
             {canFullView && (
               <Button asChild size="sm" variant="outline">
@@ -347,6 +355,17 @@ export default async function EventPage({
             {event.departments.map((ed) => {
               const deptColor = getDeptColor(ed.department.name);
               const canEditThisDept = canEdit || managedDeptIds.includes(ed.departmentId);
+              const totalReqs = ed.requirements.length;
+              const assignedReqs = ed.requirements.filter((r) => r.assignments.length > 0).length;
+              const progressPct = totalReqs > 0 ? Math.round((assignedReqs / totalReqs) * 100) : null;
+              const progressColor =
+                progressPct === null
+                  ? "bg-muted-foreground/20 text-muted-foreground"
+                  : progressPct === 100
+                  ? "bg-green-100 text-green-700"
+                  : progressPct === 0
+                  ? "bg-red-100 text-red-700"
+                  : "bg-amber-100 text-amber-700";
 
               return (
                 <Card key={ed.id} className="overflow-hidden">
@@ -358,6 +377,11 @@ export default async function EventPage({
                       <CardTitle className="text-base flex items-center gap-2" style={{ color: deptColor.text }}>
                         <Building2 className="h-4 w-4" style={{ color: deptColor.text, opacity: 0.7 }} />
                         {ed.department.name}
+                        {progressPct !== null && (
+                          <span className={`ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${progressColor}`}>
+                            {assignedReqs}/{totalReqs} assigned
+                          </span>
+                        )}
                       </CardTitle>
                       {canEditThisDept && (
                         <Button

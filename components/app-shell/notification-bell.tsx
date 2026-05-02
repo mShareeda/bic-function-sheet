@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { markOneReadAction, markAllReadForUserAction } from "@/server/actions/notifications";
 
 type NotificationItem = {
   id: string;
@@ -23,12 +24,14 @@ type SSEPayload = {
 const RETRY_DELAY_MS = 5_000;
 
 export function NotificationBell() {
+  const router = useRouter();
   const [payload, setPayload] = React.useState<SSEPayload>({
     unreadCount: 0,
     notifications: [],
   });
   const [open, setOpen] = React.useState(false);
   const [connected, setConnected] = React.useState(false);
+  const [markingAll, setMarkingAll] = React.useState(false);
   const panelRef = React.useRef<HTMLDivElement>(null);
   const esRef = React.useRef<EventSource | null>(null);
   const retryRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +98,37 @@ export function NotificationBell() {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Optimistically decrement unread count for one notification
+  function optimisticMarkOne(id: string) {
+    setPayload((prev) => ({
+      unreadCount: Math.max(0, prev.unreadCount - 1),
+      notifications: prev.notifications.map((n) =>
+        n.id === id ? { ...n, _read: true } : n,
+      ) as NotificationItem[],
+    }));
+  }
+
+  // Handle clicking a notification row: mark read + navigate in one gesture
+  async function handleNotificationClick(n: NotificationItem) {
+    optimisticMarkOne(n.id);
+    setOpen(false);
+    await markOneReadAction(n.id);
+    if (n.url) router.push(n.url);
+  }
+
+  // Mark all read with optimistic update
+  async function handleMarkAllRead() {
+    const count = payload.unreadCount;
+    if (count === 0 || markingAll) return;
+    setMarkingAll(true);
+    setPayload((prev) => ({ ...prev, unreadCount: 0 }));
+    try {
+      await markAllReadForUserAction();
+    } finally {
+      setMarkingAll(false);
+    }
+  }
+
   const badgeCount = payload.unreadCount;
 
   return (
@@ -147,9 +181,14 @@ export function NotificationBell() {
           <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <span className="text-sm font-semibold">Notifications</span>
             {badgeCount > 0 && (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                {badgeCount} unread
-              </span>
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                disabled={markingAll}
+                className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+              >
+                Mark all read
+              </button>
             )}
           </div>
 
@@ -161,50 +200,53 @@ export function NotificationBell() {
             </div>
           ) : (
             <ul className="max-h-[22rem] divide-y divide-border/40 overflow-y-auto">
-              {payload.notifications.map((n) => (
-                <li
-                  key={n.id}
-                  className="group px-4 py-3 transition-colors hover:bg-surface/50"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{n.title}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                        {n.body}
-                      </p>
-                      <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <span className="text-[11px] text-muted-foreground/70">
-                          {formatDistanceToNow(new Date(n.createdAt), {
-                            addSuffix: true,
-                          })}
-                        </span>
-                        {n.url && (
-                          <Link
-                            href={n.url}
-                            onClick={() => setOpen(false)}
-                            className="text-[11px] font-medium text-primary hover:underline"
-                          >
-                            View →
-                          </Link>
-                        )}
+              {payload.notifications.map((n) => {
+                const isRead = (n as NotificationItem & { _read?: boolean })._read;
+                return (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        "w-full text-left px-4 py-3 transition-colors hover:bg-surface/50",
+                        isRead && "opacity-60",
+                      )}
+                      onClick={() => handleNotificationClick(n)}
+                    >
+                      <div className="flex items-start gap-2">
+                        <span
+                          className={cn(
+                            "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
+                            isRead ? "bg-muted-foreground/30" : "bg-primary",
+                          )}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{n.title}</p>
+                          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                            {n.body}
+                          </p>
+                          <span className="mt-1 block text-[11px] text-muted-foreground/70">
+                            {formatDistanceToNow(new Date(n.createdAt), {
+                              addSuffix: true,
+                            })}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
 
           {/* Footer link */}
           <div className="border-t border-border/40 px-4 py-2.5">
-            <Link
-              href="/notifications"
-              onClick={() => setOpen(false)}
+            <button
+              type="button"
+              onClick={() => { setOpen(false); router.push("/notifications"); }}
               className="text-xs font-medium text-primary hover:underline"
             >
               View all notifications →
-            </Link>
+            </button>
           </div>
         </div>
       )}

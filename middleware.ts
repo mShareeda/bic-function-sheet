@@ -28,7 +28,7 @@ export default auth(async (req) => {
       req.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
       req.headers.get("x-real-ip") ??
       "unknown";
-    const result = checkRateLimit(`signin:${ip}`, 20, 10 * 60 * 1000);
+    const result = await checkRateLimit(`signin:${ip}`, 20, 10 * 60 * 1000);
     if (!result.allowed) {
       return new NextResponse("Too many login attempts. Try again later.", {
         status: 429,

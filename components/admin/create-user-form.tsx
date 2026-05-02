@@ -87,7 +87,7 @@ export function CreateUserForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Min. 10 chars, letters + digits"
+            placeholder="Min. 12 chars, upper + lower + digit + special"
             autoComplete="new-password"
           />
         </div>

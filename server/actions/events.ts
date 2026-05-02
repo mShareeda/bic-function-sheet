@@ -27,6 +27,14 @@ const eventSchema = z.object({
   liveEnd: z.string().datetime({ offset: true }).or(z.string()),
   breakdownStart: z.string().datetime({ offset: true }).or(z.string()),
   breakdownEnd: z.string().datetime({ offset: true }).or(z.string()),
+}).superRefine((d, ctx) => {
+  const ts = (s: string) => new Date(s).getTime();
+  const [ss, se, ls, le, bs, be] = [d.setupStart, d.setupEnd, d.liveStart, d.liveEnd, d.breakdownStart, d.breakdownEnd].map(ts);
+  if (ss >= se) ctx.addIssue({ code: "custom", message: "Setup start must be before setup end.", path: ["setupEnd"] });
+  if (se > ls)  ctx.addIssue({ code: "custom", message: "Setup end must not be after live start.", path: ["liveStart"] });
+  if (ls >= le) ctx.addIssue({ code: "custom", message: "Live start must be before live end.", path: ["liveEnd"] });
+  if (le > bs)  ctx.addIssue({ code: "custom", message: "Live end must not be after breakdown start.", path: ["breakdownStart"] });
+  if (bs >= be) ctx.addIssue({ code: "custom", message: "Breakdown start must be before breakdown end.", path: ["breakdownEnd"] });
 });
 
 function parseDate(s: string | undefined) {
@@ -444,6 +452,161 @@ export async function notifyFunctionSheetUpdated(eventId: string, changeDesc: st
   });
 }
 
+export type ReadinessCheck = { label: string; passed: boolean; detail?: string };
+export type ReadinessResult =
+  | { ok: true; allPassed: boolean; checks: ReadinessCheck[] }
+  | { ok: false; error: string };
+
+export async function checkEventReadinessAction(eventId: string): Promise<ReadinessResult> {
+  const actor = await requireSession();
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      departments: {
+        include: { requirements: { select: { id: true } } },
+      },
+    },
+  });
+  if (!event) return { ok: false, error: "Event not found." };
+  if (!canEditEvent(actor, event)) return { ok: false, error: "Not allowed." };
+
+  const checks: ReadinessCheck[] = [];
+
+  checks.push({
+    label: "Coordinator assigned",
+    passed: !!event.coordinatorId,
+    detail: event.coordinatorId ? undefined : "Assign a coordinator before sending.",
+  });
+
+  const deptCount = event.departments.length;
+  checks.push({
+    label: "At least one department assigned",
+    passed: deptCount > 0,
+    detail: deptCount > 0 ? undefined : "Add departments via the Departments tab.",
+  });
+
+  const deptsWithNoReqs = event.departments.filter((d) => d.requirements.length === 0);
+  checks.push({
+    label: "All departments have requirements",
+    passed: deptsWithNoReqs.length === 0,
+    detail:
+      deptsWithNoReqs.length > 0
+        ? `${deptsWithNoReqs.length} department(s) have no requirements entered.`
+        : undefined,
+  });
+
+  const ts = (d: Date) => d.getTime();
+  const windowsOk =
+    ts(event.setupStart) < ts(event.setupEnd) &&
+    ts(event.setupEnd) <= ts(event.liveStart) &&
+    ts(event.liveStart) < ts(event.liveEnd) &&
+    ts(event.liveEnd) <= ts(event.breakdownStart) &&
+    ts(event.breakdownStart) < ts(event.breakdownEnd);
+  checks.push({
+    label: "Time windows are valid",
+    passed: windowsOk,
+    detail: windowsOk ? undefined : "Fix the time window ordering in event settings.",
+  });
+
+  return { ok: true, allPassed: checks.every((c) => c.passed), checks };
+}
+
+export async function duplicateEventAction(
+  sourceEventId: string,
+  newTitle: string,
+  newDate: string,
+): Promise<ActionResult> {
+  const actor = await requireSession();
+  if (!canCreateEvent(actor)) return { ok: false, error: "Not allowed." };
+
+  const source = await prisma.event.findUnique({
+    where: { id: sourceEventId },
+    include: {
+      departments: {
+        include: {
+          requirements: { orderBy: { sortOrder: "asc" } },
+        },
+      },
+      eventVenues: { select: { venueId: true } },
+    },
+  });
+  if (!source) return { ok: false, error: "Source event not found." };
+
+  const title = newTitle.trim();
+  if (title.length < 2) return { ok: false, error: "Title must be at least 2 characters." };
+  const eventDate = new Date(newDate);
+  if (isNaN(eventDate.getTime())) return { ok: false, error: "Invalid event date." };
+
+  // Compute time offsets relative to the original eventDate, apply to new date
+  const offsetMs = eventDate.getTime() - source.eventDate.getTime();
+  const shiftDate = (d: Date) => new Date(d.getTime() + offsetMs);
+
+  const newEvent = await prisma.$transaction(async (tx) => {
+    const created = await tx.event.create({
+      data: {
+        title,
+        status: "DRAFT",
+        eventDate,
+        coordinatorId: source.coordinatorId,
+        salespersonName: source.salespersonName,
+        maximizerNumber: source.maximizerNumber,
+        isVip: source.isVip,
+        estimatedGuests: source.estimatedGuests,
+        clientName: source.clientName,
+        clientContact: source.clientContact,
+        setupStart: shiftDate(source.setupStart),
+        setupEnd: shiftDate(source.setupEnd),
+        liveStart: shiftDate(source.liveStart),
+        liveEnd: shiftDate(source.liveEnd),
+        breakdownStart: shiftDate(source.breakdownStart),
+        breakdownEnd: shiftDate(source.breakdownEnd),
+        createdById: actor.id,
+      },
+    });
+
+    // Clone venue assignments
+    if (source.eventVenues.length > 0) {
+      await tx.eventVenue.createMany({
+        data: source.eventVenues.map((v) => ({ eventId: created.id, venueId: v.venueId })),
+      });
+    }
+
+    // Clone departments and their requirements
+    for (const ed of source.departments) {
+      const newEd = await tx.eventDepartment.create({
+        data: { eventId: created.id, departmentId: ed.departmentId },
+      });
+      if (ed.requirements.length > 0) {
+        await tx.departmentRequirement.createMany({
+          data: ed.requirements.map((r) => ({
+            eventId: created.id,
+            departmentId: r.departmentId,
+            eventDepartmentId: newEd.id,
+            description: r.description,
+            priority: r.priority,
+            sortOrder: r.sortOrder,
+            updatedById: actor.id,
+          })),
+        });
+      }
+    }
+
+    return created;
+  });
+
+  await logAudit({
+    actorId: actor.id,
+    action: "CREATE",
+    entityType: "Event",
+    entityId: newEvent.id,
+    eventId: newEvent.id,
+    message: `Duplicated from event ${sourceEventId}`,
+  });
+
+  revalidatePath("/events");
+  return { ok: true, id: newEvent.id };
+}
+
 export async function getRequirementTemplatesAction(
   eventType: string,
 ): Promise<{ ok: true; templates: Record<string, string> } | { ok: false; error: string }> {
@@ -457,4 +620,60 @@ export async function getRequirementTemplatesAction(
     templates[r.departmentName] = r.items.join("\n");
   }
   return { ok: true, templates };
+}
+
+export async function quickCreateEventAction(
+  title: string,
+  eventDateStr: string, // yyyy-MM-dd
+  coordinatorId: string | null,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const actor = await requireSession();
+  if (!canCreateEvent(actor)) return { ok: false, error: "Not allowed." };
+
+  if (!title.trim()) return { ok: false, error: "Title is required." };
+
+  const d = new Date(eventDateStr);
+  if (isNaN(d.getTime())) return { ok: false, error: "Invalid date." };
+
+  // Default time windows: setup 08–10, live 10–22, breakdown 22–23
+  function dt(hours: number, minutes = 0) {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hours, minutes));
+  }
+
+  const event = await prisma.event.create({
+    data: {
+      title: title.trim(),
+      eventDate: d,
+      coordinatorId: coordinatorId || null,
+      setupStart: dt(8),
+      setupEnd: dt(10),
+      liveStart: dt(10),
+      liveEnd: dt(22),
+      breakdownStart: dt(22),
+      breakdownEnd: dt(23),
+      createdById: actor.id,
+    },
+  });
+
+  await logAudit({ actorId: actor.id, action: "CREATE", entityType: "Event", entityId: event.id, eventId: event.id });
+
+  if (coordinatorId && coordinatorId !== actor.id) {
+    const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+    await notify({
+      userIds: [coordinatorId],
+      type: "EVENT_ASSIGNED",
+      title: `You've been assigned as coordinator for: ${event.title}`,
+      body: `Event date: ${d.toLocaleDateString()}`,
+      eventId: event.id,
+      url: `${appUrl}/events/${event.id}`,
+      sendEmail: true,
+      emailSubject: `[BIC] You're the coordinator for: ${event.title}`,
+      emailText: `You've been assigned as event coordinator for "${event.title}" on ${d.toLocaleDateString()}.\n\nView it: ${appUrl}/events/${event.id}`,
+      emailHtml: `<p>You've been assigned as event coordinator for <strong>${event.title}</strong> on ${d.toLocaleDateString()}.</p><p><a href="${appUrl}/events/${event.id}">View the event</a></p>`,
+    });
+  }
+
+  revalidatePath("/calendar");
+  revalidatePath("/events");
+  return { ok: true, id: event.id };
 }
