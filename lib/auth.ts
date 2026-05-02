@@ -47,59 +47,66 @@ const providers = [
       password: { label: "Password", type: "password" },
     },
     async authorize(raw) {
-      const parsed = credentialsSchema.safeParse(raw);
-      if (!parsed.success) return null;
-      const { email, password } = parsed.data;
+      try {
+        const parsed = credentialsSchema.safeParse(raw);
+        if (!parsed.success) return null;
+        const { email, password } = parsed.data;
 
-      const user = await prisma.user.findUnique({
-        where: { email: email.toLowerCase() },
-        include: { roles: true },
-      });
-      if (!user || !user.isActive || !user.passwordHash) return null;
+        const user = await prisma.user.findUnique({
+          where: { email: email.toLowerCase() },
+          include: { roles: true },
+        });
+        if (!user || !user.isActive || !user.passwordHash) return null;
 
-      // Lockout check
-      if (user.lockedUntil && user.lockedUntil > new Date()) {
-        return null;
-      }
+        // Lockout check
+        if (user.lockedUntil && user.lockedUntil > new Date()) {
+          return null;
+        }
 
-      const ok = await verifyPassword(user.passwordHash, password);
-      if (!ok) {
-        const now = new Date();
-        const sinceLast =
-          user.lastLoginAt && now.getTime() - user.lastLoginAt.getTime() < LOCKOUT_WINDOW_MS
-            ? user.failedLoginAttempts
-            : 0;
-        const newCount = sinceLast + 1;
+        const ok = await verifyPassword(user.passwordHash, password);
+        if (!ok) {
+          const now = new Date();
+          const sinceLast =
+            user.lastLoginAt && now.getTime() - user.lastLoginAt.getTime() < LOCKOUT_WINDOW_MS
+              ? user.failedLoginAttempts
+              : 0;
+          const newCount = sinceLast + 1;
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              failedLoginAttempts: newCount,
+              lockedUntil:
+                newCount >= LOCKOUT_THRESHOLD
+                  ? new Date(now.getTime() + LOCKOUT_DURATION_MS)
+                  : user.lockedUntil,
+            },
+          });
+          return null;
+        }
+
         await prisma.user.update({
           where: { id: user.id },
           data: {
-            failedLoginAttempts: newCount,
-            lockedUntil:
-              newCount >= LOCKOUT_THRESHOLD
-                ? new Date(now.getTime() + LOCKOUT_DURATION_MS)
-                : user.lockedUntil,
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+            lastLoginAt: new Date(),
           },
         });
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.displayName,
+          displayName: user.displayName,
+          roles: user.roles.map((r) => r.role),
+          mustChangePassword: user.mustChangePassword,
+        } as never;
+      } catch (err) {
+        // Prevent unhandled DB/crypto exceptions from surfacing as NextAuth
+        // "server configuration" errors — return null (invalid credentials) instead.
+        console.error("[authorize] unexpected error:", err);
         return null;
       }
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-          lastLoginAt: new Date(),
-        },
-      });
-
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.displayName,
-        displayName: user.displayName,
-        roles: user.roles.map((r) => r.role),
-        mustChangePassword: user.mustChangePassword,
-      } as never;
     },
   }),
 ];

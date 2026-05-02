@@ -6,6 +6,9 @@ import type { RoleName } from "@prisma/client";
 export const authConfig = {
   pages: { signIn: "/signin", error: "/auth-error" },
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60, updateAge: 12 * 60 * 60 },
+  // trustHost must be explicit so NextAuth never rejects a valid request as UntrustedHost,
+  // regardless of whether AUTH_TRUST_HOST env var is picked up at runtime.
+  trustHost: true,
   callbacks: {
     async jwt({ token, user }) {
       // On sign-in `user` is populated; copy fields into the JWT.
