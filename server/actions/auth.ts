@@ -34,7 +34,10 @@ export async function signInAction(formData: FormData): Promise<ActionResult> {
       ...parsed.data,
       redirect: false,
     });
-  } catch {
+  } catch (e) {
+    // Next.js redirect() throws internally — re-throw so the router handles it.
+    // Check both the v15 NEXT_REDIRECT digest and the AuthError class name.
+    if ((e as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) throw e;
     return { ok: false, error: "Invalid email or password." };
   }
   redirect("/dashboard");
