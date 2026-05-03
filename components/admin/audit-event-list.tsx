@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import type { AuditEventGroup, AuditEntry } from "@/app/(app)/admin/audit/page";
 
-const TS_FORMAT = "yyyy-MM-dd HH:mm";
+const TS_FORMAT = "HH:mm dd-MMMM-yyyy";
 
 function AuditEntryRow({ entry }: { entry: AuditEntry }) {
   return (

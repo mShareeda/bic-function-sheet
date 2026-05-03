@@ -110,12 +110,7 @@ export function canViewFullFunctionSheet(
 ) {
   if (isAdmin(u)) return true;
   if (isAssignedCoordinator(u, ev)) return true;
-  if (
-    u.roles.includes("DEPT_MANAGER") &&
-    managedDepartmentIds.some((d) => eventDepartmentIds.includes(d))
-  ) {
-    return true;
-  }
+  if (u.roles.includes("DEPT_MANAGER")) return true;
   return false;
 }
 
@@ -129,7 +124,7 @@ export function canExportPdf(
 }
 
 export function canViewGlobalAudit(u: SessionUser) {
-  return isAdmin(u);
+  return isAdmin(u) || u.roles.includes("COORDINATOR");
 }
 
 export function canViewEventAudit(u: SessionUser, ev: EventLike) {

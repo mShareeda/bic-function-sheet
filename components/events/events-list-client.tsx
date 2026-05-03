@@ -23,10 +23,19 @@ export type EventListItem = {
   estimatedGuests?: number | null;
 };
 
-export function EventsListClient({ events }: { events: EventListItem[] }) {
+export function EventsListClient({
+  events,
+  initialStatus,
+}: {
+  events: EventListItem[];
+  initialStatus?: string;
+}) {
   const [query, setQuery] = React.useState("");
   const [activeStatuses, setActiveStatuses] = React.useState<Set<EventStatus>>(
-    new Set(),
+    () => {
+      const s = initialStatus as EventStatus | undefined;
+      return s && ALL_STATUSES.includes(s) ? new Set([s]) : new Set();
+    },
   );
 
   const filtered = React.useMemo(() => {

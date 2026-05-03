@@ -92,7 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/admin/audit",
     label: "Audit",
     icon: ScrollText,
-    show: (roles) => has(roles, "ADMIN"),
+    show: (roles) => has(roles, "ADMIN", "COORDINATOR"),
     group: "admin",
   },
 ];
