@@ -230,6 +230,37 @@ export async function deleteTemplateAction(id: string): Promise<ActionResult> {
   redirect("/recurring");
 }
 
+// ── Patch: update only the departments list on a template ────────────────────
+export async function updateTemplateDepartmentsAction(
+  templateId: string,
+  departments: TemplateDept[],
+): Promise<ActionResult> {
+  const actor = await requireSession();
+  if (!canCreateEvent(actor)) return { ok: false, error: "Not allowed." };
+
+  const row = await prisma.eventTemplate.findUnique({ where: { id: templateId } });
+  if (!row) return { ok: false, error: "Not found." };
+  if (row.createdById !== actor.id && !isAdmin(actor))
+    return { ok: false, error: "Not allowed." };
+
+  await prisma.eventTemplate.update({
+    where: { id: templateId },
+    data: { departments: departments as object[] },
+  });
+
+  await logAudit({
+    actorId: actor.id,
+    action: "UPDATE",
+    entityType: "EventTemplate",
+    entityId: templateId,
+    message: "Updated department requirements",
+  });
+
+  revalidatePath("/recurring");
+  revalidatePath(`/recurring/${templateId}`);
+  return { ok: true };
+}
+
 // ── Instantiate: create an event from a template ──────────────────────────────
 
 const instantiateSchema = z.object({
@@ -246,6 +277,11 @@ const instantiateSchema = z.object({
   breakdownStart: z.string().min(1),
   breakdownEnd: z.string().min(1),
   sendMode: z.enum(["draft", "full", "provisional"]).optional(),
+  // Per-call requirement overrides — takes precedence over stored template requirements
+  departmentRequirements: z.array(z.object({
+    departmentId: z.string(),
+    requirements: z.string().optional(),
+  })).optional(),
 });
 
 export type InstantiatePayload = z.infer<typeof instantiateSchema>;
@@ -276,8 +312,16 @@ export async function createEventFromTemplateAction(
   const tmpl = await prisma.eventTemplate.findUnique({ where: { id: d.templateId } });
   if (!tmpl) return { ok: false, error: "Template not found." };
 
-  const depts = parseTemplateDepts(tmpl.departments);
+  const templateDepts = parseTemplateDepts(tmpl.departments);
   const agendaItems = parseTemplateAgenda(tmpl.agendaItems);
+
+  // Merge per-call requirement overrides into template depts
+  const depts = d.departmentRequirements
+    ? templateDepts.map((td) => {
+        const over = d.departmentRequirements!.find((r) => r.departmentId === td.departmentId);
+        return over ? { ...td, requirements: over.requirements ?? td.requirements } : td;
+      })
+    : templateDepts;
 
   // Extract date portion from eventDate for combining with HH:mm times
   const datePart = new Date(d.eventDate).toISOString().slice(0, 10);
