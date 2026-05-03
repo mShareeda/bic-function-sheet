@@ -195,7 +195,9 @@ export function EventWizard({
     if (Object.keys(e).length === 0) setStep(target);
   }
 
-  function buildPayload(publishAndSend: boolean) {
+  type SendMode = "draft" | "full" | "provisional";
+
+  function buildPayload(sendMode: SendMode) {
     return {
       title: state.title.trim(),
       eventDate: state.eventDateTime,
@@ -228,11 +230,11 @@ export function EventWizard({
         departmentId: d.departmentId,
         requirements: d.requirements,
       })),
-      publishAndSend,
+      sendMode,
     };
   }
 
-  function submit(publishAndSend: boolean) {
+  function submit(sendMode: SendMode) {
     const e = validateStep("review");
     setErrors(e);
     if (Object.keys(e).length > 0) {
@@ -240,16 +242,17 @@ export function EventWizard({
       return;
     }
     startTransition(async () => {
-      const result = await createEventCompleteAction(buildPayload(publishAndSend));
+      const result = await createEventCompleteAction(buildPayload(sendMode));
       if (!result.ok) {
         toast({ kind: "error", title: "Could not create event", description: result.error });
         return;
       }
-      toast({
-        kind: "success",
-        title: publishAndSend ? "Event published & sheet sent" : "Event created",
-        description: state.title,
-      });
+      const titles: Record<SendMode, string> = {
+        draft: "Event saved as draft",
+        full: "Function sheet sent",
+        provisional: "Provisional function sheet sent",
+      };
+      toast({ kind: "success", title: titles[sendMode], description: state.title });
       router.push(`/events/${result.id}`);
     });
   }
@@ -330,23 +333,23 @@ export function EventWizard({
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              onClick={() => submit(false)}
+              onClick={() => submit("draft")}
               disabled={pending}
             >
-              {pending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
               Save as draft
             </Button>
-            <Button onClick={() => submit(true)} disabled={pending}>
-              {pending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              Publish & send sheet
+            <Button
+              variant="secondary"
+              onClick={() => submit("provisional")}
+              disabled={pending}
+            >
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Send provisional sheet
+            </Button>
+            <Button onClick={() => submit("full")} disabled={pending}>
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              Send function sheet
             </Button>
           </div>
         )}
@@ -864,7 +867,7 @@ function ReviewStep({
     <div className="space-y-6">
       <StepHeader
         title="Review & publish"
-        description="Double-check everything before publishing. You can save it as a draft or publish and send the function sheet immediately."
+        description="Double-check everything before publishing. Save as draft, or send the provisional or final function sheet to all department managers."
       />
 
       <Section title={state.title || "Untitled event"}>
