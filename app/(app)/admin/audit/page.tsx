@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { isAdmin } from "@/lib/authz";
+import { isAdmin, hasRole } from "@/lib/authz";
 import type { SessionUser } from "@/lib/authz";
 import { AuditEventList } from "@/components/admin/audit-event-list";
 import { formatDistanceToNow } from "date-fns";
@@ -32,7 +32,7 @@ export default async function AdminAuditPage({
 }) {
   const session = await auth();
   const u = session!.user as SessionUser;
-  if (!isAdmin(u)) redirect("/dashboard");
+  if (!isAdmin(u) && !hasRole(u, "COORDINATOR")) redirect("/dashboard");
 
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1"));

@@ -198,7 +198,6 @@ export default async function DashboardPage() {
           where: {
             ...coordScope,
             eventDate: { gte: now, lte: in30 },
-            status: { in: ACTIVE_STATUSES },
           },
           include: { coordinator: { select: { displayName: true } } },
           orderBy: { eventDate: "asc" },
@@ -206,7 +205,7 @@ export default async function DashboardPage() {
         }),
         prisma.event.groupBy({
           by: ["status"],
-          where: { ...coordScope, status: { in: ACTIVE_STATUSES } },
+          where: { coordinatorId: u.id },
           _count: { _all: true },
           orderBy: { status: "asc" },
         }),
@@ -255,7 +254,7 @@ export default async function DashboardPage() {
           <StatCard
             label="Upcoming (30d)"
             value={upcomingEvents.length}
-            sub="Active events ahead"
+            sub="Events in the next 30 days"
             tone="primary"
             delay={0}
           />
@@ -282,24 +281,25 @@ export default async function DashboardPage() {
           />
         </div>
 
-        {statusGroups.length > 0 && (
+        {!isAdmin(u) && statusGroups.length > 0 && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Pipeline</CardTitle>
-              <CardDescription>Active events by status</CardDescription>
+              <CardTitle className="text-base">My pipeline</CardTitle>
+              <CardDescription>Your events by status — click any to view</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {statusGroups.map((g) => (
-                  <span
+                  <Link
                     key={g.status}
-                    className="inline-flex items-center gap-2"
+                    href={`/events?status=${g.status}`}
+                    className="focus-ring inline-flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-muted/60"
                   >
                     <StatusBadge status={g.status} size="md" />
                     <span className="text-sm font-bold tabular-nums">
                       {g._count._all}
                     </span>
-                  </span>
+                  </Link>
                 ))}
               </div>
             </CardContent>
@@ -315,7 +315,7 @@ export default async function DashboardPage() {
                   <Link href="/events">See all</Link>
                 </Button>
               </div>
-              <CardDescription>Next 30 days, active only</CardDescription>
+              <CardDescription>Next 30 days, all statuses</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
               {upcomingEvents.length === 0 ? (
@@ -394,8 +394,6 @@ export default async function DashboardPage() {
       prisma.event.findMany({
         where: {
           eventDate: { gte: now, lte: in30 },
-          status: { in: ACTIVE_STATUSES },
-          departments: { some: { departmentId: { in: deptIds } } },
         },
         include: { coordinator: { select: { displayName: true } } },
         orderBy: { eventDate: "asc" },

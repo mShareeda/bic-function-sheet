@@ -7,9 +7,14 @@ import type { SessionUser } from "@/lib/authz";
 import { Button } from "@/components/ui/button";
 import { EventsListClient } from "@/components/events/events-list-client";
 
-export default async function EventsPage() {
+export default async function EventsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
   const session = await auth();
   const u = session!.user as SessionUser;
+  const { status: initialStatus } = await searchParams;
 
   let where = {};
   if (isAdmin(u)) {
@@ -17,15 +22,7 @@ export default async function EventsPage() {
   } else if (hasRole(u, "COORDINATOR")) {
     where = { coordinatorId: u.id };
   } else if (hasRole(u, "DEPT_MANAGER")) {
-    const memberships = await prisma.departmentMember.findMany({
-      where: { userId: u.id, isManager: true },
-      select: { departmentId: true },
-    });
-    where = {
-      departments: {
-        some: { departmentId: { in: memberships.map((m) => m.departmentId) } },
-      },
-    };
+    where = {};
   } else {
     const assignments = await prisma.requirementAssignment.findMany({
       where: { userId: u.id },
@@ -75,7 +72,7 @@ export default async function EventsPage() {
         )}
       </div>
 
-      <EventsListClient events={items} />
+      <EventsListClient events={items} initialStatus={initialStatus} />
     </div>
   );
 }
