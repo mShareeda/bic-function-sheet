@@ -16,6 +16,12 @@ const USERS: { email: string; displayName: string; password: string; role: RoleN
     password: "admin@BIC12345",
     role: "COORDINATOR",
   },
+  {
+    email: "manager@bic.local",
+    displayName: "BIC Manager",
+    password: "admin@BIC12345",
+    role: "DEPT_MANAGER",
+  },
 ];
 
 async function main() {
