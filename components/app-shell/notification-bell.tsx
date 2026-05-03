@@ -113,7 +113,15 @@ export function NotificationBell() {
     optimisticMarkOne(n.id);
     setOpen(false);
     await markOneReadAction(n.id);
-    if (n.url) router.push(n.url);
+    if (n.url) {
+      try {
+        // Strip the origin so absolute URLs (stored with APP_URL) always
+        // navigate within the current deployment instead of going to localhost.
+        router.push(new URL(n.url).pathname);
+      } catch {
+        router.push(n.url);
+      }
+    }
   }
 
   // Mark all read with optimistic update
@@ -175,7 +183,7 @@ export function NotificationBell() {
         <div
           role="dialog"
           aria-label="Notifications panel"
-          className="glass-strong absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md shadow-xl animate-fade-in-up"
+          className="bg-popover border border-border absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md shadow-xl animate-fade-in-up"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
