@@ -232,6 +232,51 @@ export async function toggleDepartmentActiveAction(deptId: string): Promise<Acti
   return { ok: true };
 }
 
+export async function updateDepartmentAction(deptId: string, formData: FormData): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+  const parsed = deptSchema.safeParse({
+    name: String(formData.get("name") ?? ""),
+    slug: String(formData.get("slug") ?? ""),
+  });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+
+  try {
+    await prisma.department.update({
+      where: { id: deptId },
+      data: { name: parsed.data.name, slug: parsed.data.slug },
+    });
+  } catch (e: unknown) {
+    if ((e as { code?: string })?.code === "P2002")
+      return { ok: false, error: "A department with that name or slug already exists." };
+    throw e;
+  }
+
+  await logAudit({ actorId: actor.id, action: "UPDATE", entityType: "Department", entityId: deptId, message: `Renamed to: ${parsed.data.name}` });
+  revalidatePath("/admin/departments");
+  return { ok: true };
+}
+
+export async function deleteDepartmentAction(deptId: string): Promise<ActionResult> {
+  const actor = await requireRole("ADMIN");
+
+  const usageCount = await prisma.eventDepartment.count({ where: { departmentId: deptId } });
+  if (usageCount > 0) {
+    return {
+      ok: false,
+      error: `Cannot delete: this department appears in ${usageCount} event${usageCount === 1 ? "" : "s"}. Disable it instead.`,
+    };
+  }
+
+  const dept = await prisma.department.findUnique({ where: { id: deptId } });
+  if (!dept) return { ok: false, error: "Not found." };
+
+  // DepartmentMember cascades; no EventDepartment rows so safe to hard-delete
+  await prisma.department.delete({ where: { id: deptId } });
+  await logAudit({ actorId: actor.id, action: "DELETE", entityType: "Department", entityId: deptId, message: `Deleted: ${dept.name}` });
+  revalidatePath("/admin/departments");
+  return { ok: true };
+}
+
 export async function createVenueAction(name: string): Promise<ActionResult> {
   const actor = await requireRole("ADMIN");
   if (!name.trim()) return { ok: false, error: "Name required." };
