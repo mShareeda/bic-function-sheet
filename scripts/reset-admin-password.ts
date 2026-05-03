@@ -1,27 +1,71 @@
-import { PrismaClient } from "@prisma/client";
-import { hashPassword } from "../lib/password";
+import { PrismaClient, type RoleName } from "@prisma/client";
+import { hashPassword, validatePasswordPolicy } from "../lib/password";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  const email = "admin@bic.local";
-  const newPassword = "123456789";
+const USERS: { email: string; displayName: string; password: string; role: RoleName }[] = [
+  {
+    email: "admin@bic.local",
+    displayName: "BIC Admin",
+    password: "admin@BIC123",
+    role: "ADMIN",
+  },
+  {
+    email: "cor@bic.local",
+    displayName: "BIC Coordinator",
+    password: "admin@BIC12345",
+    role: "COORDINATOR",
+  },
+];
 
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    console.error(`No user found with email: ${email}`);
-    process.exit(1);
+async function main() {
+  for (const entry of USERS) {
+    const policyError = validatePasswordPolicy(entry.password);
+    if (policyError) {
+      console.error(`Password policy violation for ${entry.email}: ${policyError}`);
+      process.exit(1);
+    }
+
+    const passwordHash = await hashPassword(entry.password);
+
+    const existing = await prisma.user.findUnique({ where: { email: entry.email } });
+
+    if (existing) {
+      await prisma.user.update({
+        where: { email: entry.email },
+        data: {
+          passwordHash,
+          mustChangePassword: false,
+          isActive: true,
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+
+      // Ensure the role exists
+      await prisma.userRole.upsert({
+        where: { userId_role: { userId: existing.id, role: entry.role } },
+        create: { userId: existing.id, role: entry.role },
+        update: {},
+      });
+
+      console.log(`Updated: ${entry.email} (role: ${entry.role})`);
+    } else {
+      const user = await prisma.user.create({
+        data: {
+          email: entry.email,
+          displayName: entry.displayName,
+          passwordHash,
+          mustChangePassword: false,
+          isActive: true,
+          roles: { create: [{ role: entry.role }] },
+        },
+      });
+      console.log(`Created: ${user.email} (role: ${entry.role})`);
+    }
   }
 
-  const passwordHash = await hashPassword(newPassword);
-
-  await prisma.user.update({
-    where: { email },
-    data: { passwordHash, mustChangePassword: false },
-  });
-
-  console.log(`Password for ${email} updated successfully.`);
-  console.log(`mustChangePassword set to false.`);
+  console.log("Done. Both accounts are ready to log in.");
 }
 
 main()
