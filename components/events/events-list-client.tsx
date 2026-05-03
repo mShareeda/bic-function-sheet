@@ -2,15 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import type { EventStatus } from "@prisma/client";
-import { Search, ListFilter, CalendarX } from "lucide-react";
+import { Search, ListFilter, CalendarX, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatusBadge, ALL_STATUSES } from "@/components/ui/status-badge";
 import { VipBadge } from "@/components/ui/vip-badge";
 import { cn } from "@/lib/utils";
+import { deleteEventAction } from "@/server/actions/events";
 
 export type EventListItem = {
   id: string;
@@ -26,11 +28,15 @@ export type EventListItem = {
 export function EventsListClient({
   events,
   initialStatus,
+  isAdmin,
 }: {
   events: EventListItem[];
   initialStatus?: string;
+  isAdmin?: boolean;
 }) {
+  const router = useRouter();
   const [query, setQuery] = React.useState("");
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [activeStatuses, setActiveStatuses] = React.useState<Set<EventStatus>>(
     () => {
       const s = initialStatus as EventStatus | undefined;
@@ -66,6 +72,20 @@ export function EventsListClient({
   };
 
   const filtersActive = query !== "" || activeStatuses.size > 0;
+
+  async function handleDelete(e: React.MouseEvent, eventId: string, title: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    setDeletingId(eventId);
+    const result = await deleteEventAction(eventId);
+    if (result.ok) {
+      router.refresh();
+    } else {
+      alert(result.error);
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -134,38 +154,55 @@ export function EventsListClient({
       ) : (
         <div className="grid gap-3">
           {filtered.map((ev, i) => (
-            <Link
+            <div
               key={ev.id}
-              href={`/events/${ev.id}`}
-              className="focus-ring block rounded-lg animate-fade-in-up"
+              className="relative animate-fade-in-up"
               style={{ animationDelay: `${i * 50}ms`, animationFillMode: "both" }}
             >
-              <Card
-                className={cn(
-                  "group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-glass-lg",
-                  ev.isVip
-                    ? "vip-shimmer border-l-4 border-l-vip ring-1 ring-vip/25 hover:ring-vip/40"
-                    : "",
-                )}
+              <Link
+                href={`/events/${ev.id}`}
+                className={cn("focus-ring block rounded-lg", deletingId === ev.id && "pointer-events-none opacity-50")}
               >
-                <CardContent className="flex flex-wrap items-center gap-4 py-4">
-                  <DateBlock date={new Date(ev.eventDate)} isVip={ev.isVip} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-base font-semibold">{ev.title}</span>
-                      {ev.isVip && <VipBadge size="xs" />}
+                <Card
+                  className={cn(
+                    "group cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-glass-lg",
+                    ev.isVip
+                      ? "vip-shimmer border-l-4 border-l-vip ring-1 ring-vip/25 hover:ring-vip/40"
+                      : "",
+                  )}
+                >
+                  <CardContent className="flex flex-wrap items-center gap-4 py-4">
+                    <DateBlock date={new Date(ev.eventDate)} isVip={ev.isVip} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-base font-semibold">{ev.title}</span>
+                        {ev.isVip && <VipBadge size="xs" />}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(ev.eventDate), "EEE d MMM yyyy")}
+                        {ev.coordinator && ` · ${ev.coordinator}`}
+                        {ev.maximizerNumber && ` · #${ev.maximizerNumber}`}
+                        {ev.estimatedGuests ? ` · ${ev.estimatedGuests} guests` : ""}
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {format(new Date(ev.eventDate), "EEE d MMM yyyy")}
-                      {ev.coordinator && ` · ${ev.coordinator}`}
-                      {ev.maximizerNumber && ` · #${ev.maximizerNumber}`}
-                      {ev.estimatedGuests ? ` · ${ev.estimatedGuests} guests` : ""}
-                    </p>
-                  </div>
-                  <StatusBadge status={ev.status} />
-                </CardContent>
-              </Card>
-            </Link>
+                    <StatusBadge status={ev.status} />
+                    {isAdmin && <div className="w-8" />}
+                  </CardContent>
+                </Card>
+              </Link>
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 z-10"
+                  disabled={deletingId === ev.id}
+                  onClick={(e) => handleDelete(e, ev.id, ev.title)}
+                  aria-label={`Delete ${ev.title}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           ))}
         </div>
       )}

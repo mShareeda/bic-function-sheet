@@ -72,7 +72,7 @@ export default async function EventsPage({
         )}
       </div>
 
-      <EventsListClient events={items} initialStatus={initialStatus} />
+      <EventsListClient events={items} initialStatus={initialStatus} isAdmin={isAdmin(u)} />
     </div>
   );
 }

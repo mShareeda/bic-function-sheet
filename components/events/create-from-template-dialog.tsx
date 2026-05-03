@@ -45,7 +45,9 @@ export function CreateFromTemplateDialog({ template, coordinators }: Props) {
   const [breakdownStart, setBreakdownStart] = useState("18:00");
   const [breakdownEnd, setBreakdownEnd] = useState("22:00");
 
-  function submit() {
+  type SendMode = "draft" | "full" | "provisional";
+
+  function submit(sendMode: SendMode) {
     if (!eventDate) {
       setError("Please select an event date.");
       return;
@@ -66,6 +68,7 @@ export function CreateFromTemplateDialog({ template, coordinators }: Props) {
         liveEnd,
         breakdownStart,
         breakdownEnd,
+        sendMode,
       });
 
       if (!result.ok) {
@@ -243,17 +246,21 @@ export function CreateFromTemplateDialog({ template, coordinators }: Props) {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-border/40">
+            <div className="flex flex-wrap justify-end gap-2 px-6 py-4 border-t border-border/40">
               <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
                 Cancel
               </Button>
-              <Button onClick={submit} disabled={pending}>
-                {pending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <CalendarPlus className="h-4 w-4" />
-                )}
-                Create event
+              <Button variant="outline" onClick={() => submit("draft")} disabled={pending}>
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+                Save as draft
+              </Button>
+              <Button variant="secondary" onClick={() => submit("provisional")} disabled={pending}>
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+                Send provisional
+              </Button>
+              <Button onClick={() => submit("full")} disabled={pending}>
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarPlus className="h-4 w-4" />}
+                Send function sheet
               </Button>
             </div>
           </div>

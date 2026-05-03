@@ -4,7 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireSession, canEditEvent, canCreateEvent, isAdmin } from "@/lib/authz";
+import { requireSession, canEditEvent, canCreateEvent, canDeleteEvent, isAdmin } from "@/lib/authz";
 import { logAudit, buildDiff } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
 
@@ -261,7 +261,7 @@ const wizardSchema = z.object({
   breakdownEnd: z.string().min(1),
   agenda: z.array(wizardAgendaSchema),
   departments: z.array(wizardDepartmentSchema),
-  publishAndSend: z.boolean().optional(),
+  sendMode: z.enum(["draft", "full", "provisional"]).optional(),
 });
 
 export type WizardPayload = z.infer<typeof wizardSchema>;
@@ -368,15 +368,16 @@ export async function createEventCompleteAction(
     });
   }
 
-  if (d.publishAndSend) {
+  if (d.sendMode === "full" || d.sendMode === "provisional") {
+    const provisional = d.sendMode === "provisional";
     await prisma.event.update({
       where: { id: event.id },
       data: {
-        status: "FUNCTION_SHEET_SENT",
+        status: provisional ? "PROVISIONAL_FUNCTION_SHEET_SENT" : "FUNCTION_SHEET_SENT",
         functionSheetSentAt: new Date(),
       },
     });
-    await sendFunctionSheetNotifications(event.id, actor.id);
+    await sendFunctionSheetNotifications(event.id, actor.id, provisional);
   }
 
   return { ok: true, id: event.id };
@@ -450,6 +451,20 @@ export async function notifyFunctionSheetUpdated(eventId: string, changeDesc: st
       emailedAt: null,
     })),
   });
+}
+
+export async function deleteEventAction(eventId: string): Promise<ActionResult> {
+  const actor = await requireSession();
+  if (!canDeleteEvent(actor)) return { ok: false, error: "Not allowed." };
+
+  const event = await prisma.event.findUnique({ where: { id: eventId } });
+  if (!event) return { ok: false, error: "Not found." };
+
+  await prisma.event.delete({ where: { id: eventId } });
+  await logAudit({ actorId: actor.id, action: "DELETE", entityType: "Event", entityId: eventId, eventId });
+
+  revalidatePath("/events");
+  return { ok: true };
 }
 
 export type ReadinessCheck = { label: string; passed: boolean; detail?: string };

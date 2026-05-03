@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireSession, canCreateEvent, isAdmin } from "@/lib/authz";
 import { logAudit } from "@/lib/audit";
+import { notify } from "@/lib/notifications";
 
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -244,6 +245,7 @@ const instantiateSchema = z.object({
   liveEnd: z.string().min(1),
   breakdownStart: z.string().min(1),
   breakdownEnd: z.string().min(1),
+  sendMode: z.enum(["draft", "full", "provisional"]).optional(),
 });
 
 export type InstantiatePayload = z.infer<typeof instantiateSchema>;
@@ -347,5 +349,59 @@ export async function createEventFromTemplateAction(
     message: `Created from template: ${tmpl.title}`,
   });
 
+  if (d.sendMode === "full" || d.sendMode === "provisional") {
+    const provisional = d.sendMode === "provisional";
+    await prisma.event.update({
+      where: { id: event.id },
+      data: {
+        status: provisional ? "PROVISIONAL_FUNCTION_SHEET_SENT" : "FUNCTION_SHEET_SENT",
+        functionSheetSentAt: new Date(),
+      },
+    });
+    await sendFunctionSheetNotificationsTemplate(event.id, event.title, event.eventDate, actor.id, provisional);
+  }
+
   return { ok: true, id: event.id };
+}
+
+async function sendFunctionSheetNotificationsTemplate(
+  eventId: string,
+  eventTitle: string,
+  eventDate: Date,
+  actorId: string,
+  provisional: boolean,
+) {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      departments: {
+        include: { department: { include: { members: { where: { isManager: true } } } } },
+      },
+    },
+  });
+  if (!event) return;
+
+  const managerIds = [
+    ...new Set(event.departments.flatMap((ed) => ed.department.members.map((m) => m.userId))),
+  ];
+
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const url = `${appUrl}/events/${eventId}`;
+  const docLabel = provisional ? "Provisional function sheet" : "Function sheet";
+  const provisionalNote = provisional ? " This is a provisional sheet — details may change." : "";
+
+  await notify({
+    userIds: managerIds,
+    type: "FUNCTION_SHEET_SENT",
+    title: `${docLabel} sent: ${eventTitle}`,
+    body: `Event date: ${eventDate.toLocaleDateString()}${provisionalNote}`,
+    eventId,
+    url,
+    sendEmail: true,
+    emailSubject: `[BIC] ${docLabel}: ${eventTitle}`,
+    emailText: `The ${docLabel.toLowerCase()} for "${eventTitle}" (${eventDate.toLocaleDateString()}) has been sent to your department.${provisionalNote}\n\nView it: ${url}`,
+    emailHtml: `<p>The ${docLabel.toLowerCase()} for <strong>${eventTitle}</strong> (${eventDate.toLocaleDateString()}) has been sent.${provisional ? " <strong>This is provisional and may be updated.</strong>" : ""}</p><p><a href="${url}">View the function sheet</a></p>`,
+  });
+
+  await logAudit({ actorId, action: "SEND_FUNCTION_SHEET", entityType: "Event", entityId: eventId, eventId });
 }
