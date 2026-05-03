@@ -23,6 +23,14 @@ type SSEPayload = {
 
 const RETRY_DELAY_MS = 5_000;
 
+function resolvePathname(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url;
+  }
+}
+
 export function NotificationBell() {
   const router = useRouter();
   const [payload, setPayload] = React.useState<SSEPayload>({
@@ -30,8 +38,8 @@ export function NotificationBell() {
     notifications: [],
   });
   const [open, setOpen] = React.useState(false);
-  const [connected, setConnected] = React.useState(false);
   const [markingAll, setMarkingAll] = React.useState(false);
+  const [connected, setConnected] = React.useState(false);
   const panelRef = React.useRef<HTMLDivElement>(null);
   const esRef = React.useRef<EventSource | null>(null);
   const retryRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,20 +116,12 @@ export function NotificationBell() {
     }));
   }
 
-  // Handle clicking a notification row: mark read + navigate in one gesture
-  async function handleNotificationClick(n: NotificationItem) {
+  // Navigate immediately; mark read in the background so it never blocks navigation
+  function handleNotificationClick(n: NotificationItem) {
     optimisticMarkOne(n.id);
     setOpen(false);
-    await markOneReadAction(n.id);
-    if (n.url) {
-      try {
-        // Strip the origin so absolute URLs (stored with APP_URL) always
-        // navigate within the current deployment instead of going to localhost.
-        router.push(new URL(n.url).pathname);
-      } catch {
-        router.push(n.url);
-      }
-    }
+    markOneReadAction(n.id).catch(() => {});
+    if (n.url) router.push(resolvePathname(n.url));
   }
 
   // Mark all read with optimistic update
@@ -183,10 +183,10 @@ export function NotificationBell() {
         <div
           role="dialog"
           aria-label="Notifications panel"
-          className="bg-popover border border-border absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-md shadow-xl animate-fade-in-up"
+          className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-xl animate-fade-in-up"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
+          <div className="flex items-center justify-between bg-popover border-b border-border px-4 py-3">
             <span className="text-sm font-semibold">Notifications</span>
             {badgeCount > 0 && (
               <button
@@ -202,12 +202,12 @@ export function NotificationBell() {
 
           {/* Notification list */}
           {payload.notifications.length === 0 ? (
-            <div className="px-4 py-8 text-center">
+            <div className="bg-popover px-4 py-8 text-center">
               <Bell className="mx-auto mb-2 h-6 w-6 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">All caught up!</p>
             </div>
           ) : (
-            <ul className="max-h-[22rem] divide-y divide-border/40 overflow-y-auto">
+            <ul className="max-h-[22rem] divide-y divide-border overflow-y-auto bg-popover">
               {payload.notifications.map((n) => {
                 const isRead = (n as NotificationItem & { _read?: boolean })._read;
                 return (
@@ -215,7 +215,7 @@ export function NotificationBell() {
                     <button
                       type="button"
                       className={cn(
-                        "w-full text-left px-4 py-3 transition-colors hover:bg-surface/50",
+                        "w-full text-left px-4 py-3 transition-colors hover:bg-muted",
                         isRead && "opacity-60",
                       )}
                       onClick={() => handleNotificationClick(n)}
@@ -246,8 +246,8 @@ export function NotificationBell() {
             </ul>
           )}
 
-          {/* Footer link */}
-          <div className="border-t border-border/40 px-4 py-2.5">
+          {/* Footer */}
+          <div className="bg-popover border-t border-border px-4 py-2.5">
             <button
               type="button"
               onClick={() => { setOpen(false); router.push("/notifications"); }}
